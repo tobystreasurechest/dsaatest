@@ -62,7 +62,7 @@ function createTimeSeriesChart() {
             labels: dates.filter((_, i) => i % 30 === 0), // 每30个点显示一个标签
             datasets: [
                 {
-                    label: '累计病例',
+                    label: 'Total Cases',
                     data: cases.filter((_, i) => i % 30 === 0),
                     borderColor: 'rgb(75, 192, 192)',
                     backgroundColor: 'rgba(75, 192, 192, 0.2)',
@@ -70,7 +70,7 @@ function createTimeSeriesChart() {
                     fill: true
                 },
                 {
-                    label: '累计死亡',
+                    label: 'Total Deaths',
                     data: deaths.filter((_, i) => i % 30 === 0),
                     borderColor: 'rgb(255, 99, 132)',
                     backgroundColor: 'rgba(255, 99, 132, 0.2)',
@@ -119,7 +119,7 @@ function createVaccinationChart() {
         data: {
             labels: dates.filter((_, i) => i % 30 === 0),
             datasets: [{
-                label: '总疫苗接种数',
+                label: 'Total Vaccinations',
                 data: vaccinations.filter((_, i) => i % 30 === 0),
                 borderColor: 'rgb(54, 162, 235)',
                 backgroundColor: 'rgba(54, 162, 235, 0.2)',
@@ -268,7 +268,7 @@ function createCountryCharts() {
         data: {
             labels: topVaccinations.map(item => item[0]),
             datasets: [{
-                label: '总疫苗接种数',
+                label: 'Total Vaccinations',
                 data: topVaccinations.map(item => item[1]),
                 backgroundColor: 'rgba(54, 162, 235, 0.8)',
                 borderColor: 'rgba(54, 162, 235, 1)',
@@ -311,7 +311,7 @@ function createCountryCharts() {
         data: {
             labels: topCases.map(item => item[0]),
             datasets: [{
-                label: '累计病例',
+                label: 'Total Cases',
                 data: topCases.map(item => item[1]),
                 backgroundColor: 'rgba(75, 192, 192, 0.8)',
                 borderColor: 'rgba(75, 192, 192, 1)',
@@ -354,7 +354,7 @@ function createCountryCharts() {
         data: {
             labels: topDeaths.map(item => item[0]),
             datasets: [{
-                label: '累计死亡',
+                label: 'Total Deaths',
                 data: topDeaths.map(item => item[1]),
                 backgroundColor: 'rgba(255, 99, 132, 0.8)',
                 borderColor: 'rgba(255, 99, 132, 1)',
@@ -420,19 +420,19 @@ function updateStats() {
     statsBar.innerHTML = `
         <div class="stat-card">
             <div class="stat-value">${(totalCases / 1000000).toFixed(1)}M</div>
-            <div class="stat-label">累计病例</div>
+            <div class="stat-label">Total Cases</div>
         </div>
         <div class="stat-card">
             <div class="stat-value">${(totalDeaths / 1000).toFixed(0)}K</div>
-            <div class="stat-label">累计死亡</div>
+            <div class="stat-label">Total Deaths</div>
         </div>
         <div class="stat-card">
             <div class="stat-value">${(totalVaccinations / 1000000000).toFixed(2)}B</div>
-            <div class="stat-label">总疫苗接种</div>
+            <div class="stat-label">Total Vaccinations</div>
         </div>
         <div class="stat-card">
             <div class="stat-value">${vaccineTypes}</div>
-            <div class="stat-label">疫苗类型数</div>
+            <div class="stat-label">Vaccine Types</div>
         </div>
     `;
 }
@@ -467,10 +467,10 @@ function applyFilters() {
     }
 
     // 更新标题
-    document.getElementById('vaccineTypeTitle').textContent = `疫苗类型分布（前${topN}名）`;
-    document.getElementById('countryVaccinationTitle').textContent = `国家疫苗接种对比（前${topN}名）`;
-    document.getElementById('countryCasesTitle').textContent = `国家累计病例对比（前${topN}名）`;
-    document.getElementById('countryDeathsTitle').textContent = `国家累计死亡对比（前${topN}名）`;
+    document.getElementById('vaccineTypeTitle').textContent = `Vaccine Type Distribution (Top ${topN})`;
+    document.getElementById('countryVaccinationTitle').textContent = `Country Vaccination Comparison (Top ${topN})`;
+    document.getElementById('countryCasesTitle').textContent = `Country Total Cases Comparison (Top ${topN})`;
+    document.getElementById('countryDeathsTitle').textContent = `Country Total Deaths Comparison (Top ${topN})`;
 
     // 更新统计
     updateStats();
@@ -502,10 +502,10 @@ function resetFilters() {
     filteredCountryData = [...countryData];
 
     // 更新标题
-    document.getElementById('vaccineTypeTitle').textContent = '疫苗类型分布（前10名）';
-    document.getElementById('countryVaccinationTitle').textContent = '国家疫苗接种对比（前10名）';
-    document.getElementById('countryCasesTitle').textContent = '国家累计病例对比（前10名）';
-    document.getElementById('countryDeathsTitle').textContent = '国家累计死亡对比（前10名）';
+    document.getElementById('vaccineTypeTitle').textContent = 'Vaccine Type Distribution (Top 10)';
+    document.getElementById('countryVaccinationTitle').textContent = 'Country Vaccination Comparison (Top 10)';
+    document.getElementById('countryCasesTitle').textContent = 'Country Total Cases Comparison (Top 10)';
+    document.getElementById('countryDeathsTitle').textContent = 'Country Total Deaths Comparison (Top 10)';
 
     updateStats();
 
