@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>数据可视化仪表板</title>
+    <title>COVID-19 Data Explorer</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>📊 数据可视化仪表板</h1>
-        <div id="loading" class="loading">正在加载数据...</div>
+        <h1>COVID-19 Data Explorer</h1>
+        <div id="loading" class="loading">Data Loading...</div>
         
         <div id="dashboard" style="display: none;">
             <!-- 统计卡片 -->
@@ -19,58 +19,58 @@
             <!-- 控制面板 -->
             <div class="controls">
                 <div class="control-group">
-                    <label>国家筛选:</label>
+                    <label>Country Filter:</label>
                     <select id="countryFilter">
-                        <option value="all">所有国家</option>
+                        <option value="all">All Countries</option>
                     </select>
                 </div>
                 <div class="control-group">
-                    <label>日期范围:</label>
+                    <label>Date Range:</label>
                     <input type="date" id="startDate">
-                    <span>至</span>
+                    <span>to</span>
                     <input type="date" id="endDate">
                 </div>
                 <div class="control-group">
-                    <label>显示数量:</label>
+                    <label>Display Number:</label>
                     <select id="topN">
-                        <option value="5">前5名</option>
-                        <option value="10" selected>前10名</option>
-                        <option value="15">前15名</option>
-                        <option value="20">前20名</option>
+                        <option value="5">Top 5</option>
+                        <option value="10" selected>Top 10</option>
+                        <option value="15">Top 15</option>
+                        <option value="20">Top 20</option>
                     </select>
                 </div>
-                <button class="btn" onclick="applyFilters()">应用筛选</button>
-                <button class="btn" onclick="resetFilters()">重置</button>
+                <button class="btn" onclick="applyFilters()">Apply Filters</button>
+                <button class="btn" onclick="resetFilters()">Reset</button>
             </div>
 
             <div class="charts-grid" id="chartsContainer">
             <!-- 图表1: 时间序列 - 累计病例和死亡 -->
             <div class="chart-container full-width">
-                <h2 class="chart-title">时间序列：累计病例与累计死亡</h2>
+                <h2 class="chart-title">Time Series: Total Cases and Total Deaths</h2>
                 <canvas id="timeSeriesChart"></canvas>
             </div>
 
             <!-- 图表2: 时间序列 - 疫苗接种 -->
             <div class="chart-container full-width">
-                <h2 class="chart-title">时间序列：总疫苗接种数</h2>
+                <h2 class="chart-title">Time Series: Total Vaccinations</h2>
                 <canvas id="vaccinationChart"></canvas>
             </div>
 
             <!-- 图表3: 疫苗类型分布 -->
             <div class="chart-container">
-                <h2 class="chart-title" id="vaccineTypeTitle">疫苗类型分布（前10名）</h2>
+                <h2 class="chart-title" id="vaccineTypeTitle">Vaccine Type Distribution (Top 10)</h2>
                 <canvas id="vaccineTypeChart"></canvas>
             </div>
 
             <!-- 图表4: 国家疫苗接种对比 -->
             <div class="chart-container">
-                <h2 class="chart-title" id="countryVaccinationTitle">国家疫苗接种对比（前10名）</h2>
+                <h2 class="chart-title" id="countryVaccinationTitle">Country Vaccination Comparison (Top 10)</h2>
                 <canvas id="countryVaccinationChart"></canvas>
             </div>
 
             <!-- 图表5: 国家病例对比 -->
             <div class="chart-container">
-                <h2 class="chart-title" id="countryCasesTitle">国家累计病例对比（前10名）</h2>
+                <h2 class="chart-title" id="countryCasesTitle">Country Total Cases Comparison (Top 10)</h2>
                 <canvas id="countryCasesChart"></canvas>
             </div>
 
