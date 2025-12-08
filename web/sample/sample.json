@@ -1,0 +1,6 @@
+[
+  {"timestamp": "2025-12-07T09:00:00", "value": 45.2, "category": "sales"},
+  {"timestamp": "2025-12-07T09:05:00", "value": 67.8, "category": "traffic"},
+  {"timestamp": "2025-12-07T09:10:00", "value": 23.1, "category": "errors"},
+  {"timestamp": "2025-12-07T09:15:00", "value": 89.4, "category": "sales"}
+]
