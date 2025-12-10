@@ -661,20 +661,12 @@ function updateMap() {
     // 找到最大死亡数用于颜色映射
     const maxDeaths = Math.max(...Object.values(dateData).map(d => d.deaths), 1);
 
-    // 记录缺失坐标的iso_code，方便补充
-    if (!missingIsoLogged) {
-        const missing = Object.keys(dateData).filter(code => !isoCodeCoordinates[code]);
-        if (missing.length) {
-            console.warn('缺少坐标的 ISO 代码（未显示在地图上）:', missing);
-        }
-        missingIsoLogged = true;
-    }
-    
-    // 为每个国家添加标记
+    // 为每个国家添加标记，并记录缺失坐标的 ISO 代码
+    const missingIso = [];
     Object.entries(dateData).forEach(([isoCode, data]) => {
         const { country, deaths } = data;
         const coords = isoCodeCoordinates[isoCode];
-        if (coords && deaths > 0) {
+        if (coords) {
             // 将死亡数分成5个等级
             const intensity = Math.min(deaths / maxDeaths, 1);
             let color;
@@ -743,8 +735,14 @@ function updateMap() {
             });
             
             mapMarkers.push(circle);
+        } else if (!coords) {
+            missingIso.push(isoCode);
         }
     });
+
+    if (missingIso.length) {
+        console.warn('缺少坐标的 ISO 代码（未显示在地图上）:', Array.from(new Set(missingIso)).sort());
+    }
 }
 
 // 更新统计卡片
