@@ -682,11 +682,12 @@ function updateMap() {
                 color = 'rgb(139, 0, 0)';
             }
             
-            // 计算标记大小：让死亡数对半径的影响更明显
-            // 使用线性比例，让不同死亡数的半径差异更明显
-            const normalizedSize = deaths / maxDeaths; // 0到1之间
-            // 半径范围：最小5，最大35，所以范围是30 (35-5=30)
-            const radius = Math.max(5, Math.min(35, 5 + normalizedSize * 30)); // 从5到35，线性映射
+            // 计算标记大小：使用平方缩放让不同死亡数的半径差异更明显
+            // 平方可以让差异更突出，死亡数小的半径更小，死亡数大的半径更大
+            const normalized = deaths / maxDeaths; // 0到1之间
+            const sizeRatio = normalized * normalized; // 平方，让差异更明显
+            // 半径范围：最小8，最大55，范围47，让差异更明显
+            const radius = Math.max(4, Math.min(55, 4 + sizeRatio * 51));
             
             const circle = L.circleMarker(coords, {
                 radius: radius,
