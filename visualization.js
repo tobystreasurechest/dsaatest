@@ -654,8 +654,8 @@ function updateMap() {
             
             const color = `rgb(${r}, ${g}, ${b})`;
             
-            // 计算标记大小
-            const radius = Math.max(5, Math.min(30, Math.sqrt(deaths) / 100));
+            // 计算标记大小（增大半径）
+            const radius = Math.max(8, Math.min(50, Math.sqrt(deaths) / 60));
             
             const circle = L.circleMarker(coords, {
                 radius: radius,
