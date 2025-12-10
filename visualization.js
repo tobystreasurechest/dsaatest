@@ -687,7 +687,7 @@ function updateMap() {
             const normalized = deaths / maxDeaths; // 0到1之间
             const sizeRatio = normalized * normalized; // 平方，让差异更明显
             // 半径范围：最小8，最大55，范围47，让差异更明显
-            const radius = Math.max(4, Math.min(55, 4 + sizeRatio * 51));
+            const radius = Math.max(4, Math.min(30, 4 + sizeRatio * 26));
             
             const circle = L.circleMarker(coords, {
                 radius: radius,
