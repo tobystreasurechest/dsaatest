@@ -625,9 +625,34 @@ function updateMap() {
     Object.entries(dateData).forEach(([country, deaths]) => {
         const coords = countryCoordinates[country];
         if (coords && deaths > 0) {
-            // 根据死亡数计算颜色（红色深浅）
+            // 根据死亡数计算颜色：从浅色（粉色/白色）到深色（红色/深红）
+            // 死亡数少的用浅粉色，死亡数多的用深红色
             const intensity = Math.min(deaths / maxDeaths, 1);
-            const color = `rgb(${Math.floor(255 * intensity)}, 0, 0)`;
+            
+            // 颜色渐变：从浅粉色(255, 192, 203)到深红色(139, 0, 0)
+            // 或者从白色/浅粉色到深红色
+            let r, g, b;
+            if (intensity < 0.3) {
+                // 低死亡数：浅粉色到粉色
+                const t = intensity / 0.3;
+                r = Math.floor(255 - t * 50); // 255 -> 205
+                g = Math.floor(240 - t * 100); // 240 -> 140
+                b = Math.floor(245 - t * 100); // 245 -> 145
+            } else if (intensity < 0.7) {
+                // 中等死亡数：粉色到红色
+                const t = (intensity - 0.3) / 0.4;
+                r = Math.floor(205 + t * 50); // 205 -> 255
+                g = Math.floor(140 - t * 140); // 140 -> 0
+                b = Math.floor(145 - t * 145); // 145 -> 0
+            } else {
+                // 高死亡数：红色到深红色
+                const t = (intensity - 0.7) / 0.3;
+                r = Math.floor(255 - t * 116); // 255 -> 139
+                g = Math.floor(0);
+                b = Math.floor(0);
+            }
+            
+            const color = `rgb(${r}, ${g}, ${b})`;
             
             // 计算标记大小
             const radius = Math.max(5, Math.min(30, Math.sqrt(deaths) / 100));
@@ -635,18 +660,41 @@ function updateMap() {
             const circle = L.circleMarker(coords, {
                 radius: radius,
                 fillColor: color,
-                color: '#fff',
-                weight: 2,
+                color: '#333',
+                weight: 1.5,
                 opacity: 1,
-                fillOpacity: 0.7
+                fillOpacity: 0.8
             }).addTo(mapInstance);
             
-            // 添加弹出窗口
-            circle.bindPopup(`
-                <strong>${country}</strong><br>
-                Deaths: ${(deaths / 1000).toFixed(0)}K<br>
-                Date: ${selectedDate}
+            // 创建自定义tooltip
+            const tooltip = L.tooltip({
+                permanent: false,
+                direction: 'top',
+                offset: [0, -10]
+            }).setContent(`
+                <div style="font-weight: bold; margin-bottom: 4px;">${country}</div>
+                <div>Deaths: ${(deaths / 1000).toFixed(0)}K</div>
+                <div style="font-size: 11px; color: #666;">Date: ${selectedDate}</div>
             `);
+            
+            // 添加hover事件
+            circle.on('mouseover', function(e) {
+                this.setStyle({
+                    weight: 3,
+                    fillOpacity: 1,
+                    color: '#000'
+                });
+                circle.bindTooltip(tooltip).openTooltip();
+            });
+            
+            circle.on('mouseout', function(e) {
+                this.setStyle({
+                    weight: 1.5,
+                    fillOpacity: 0.8,
+                    color: '#333'
+                });
+                circle.closeTooltip();
+            });
             
             mapMarkers.push(circle);
         }
