@@ -44,40 +44,28 @@
             </div>
 
             <div class="charts-grid" id="chartsContainer">
-            <!-- 图表1: 时间序列 - 累计病例和死亡 -->
+            <!-- 图表1: Vaccination Over Time Across Countries -->
             <div class="chart-container full-width">
-                <h2 class="chart-title">Time Series: Total Cases and Total Deaths</h2>
-                <canvas id="timeSeriesChart"></canvas>
+                <h2 class="chart-title">1. Vaccination Over Time Across Countries</h2>
+                <canvas id="vaccinationOverTimeChart"></canvas>
             </div>
 
-            <!-- 图表2: 时间序列 - 疫苗接种 -->
+            <!-- 图表2: Death Populations Over Time -->
             <div class="chart-container full-width">
-                <h2 class="chart-title">Time Series: Total Vaccinations</h2>
-                <canvas id="vaccinationChart"></canvas>
+                <h2 class="chart-title">2. Death Populations Over Time</h2>
+                <canvas id="deathOverTimeChart"></canvas>
             </div>
 
-            <!-- 图表3: 疫苗类型分布 -->
-            <div class="chart-container">
-                <h2 class="chart-title" id="vaccineTypeTitle">Vaccine Type Distribution (Top 10)</h2>
-                <canvas id="vaccineTypeChart"></canvas>
+            <!-- 图表3: Global Spatial Patterns of Vaccination and Mortality -->
+            <div class="chart-container full-width">
+                <h2 class="chart-title">3. Global Spatial Patterns of Vaccination and Mortality</h2>
+                <canvas id="spatialPatternsChart"></canvas>
             </div>
 
-            <!-- 图表4: 国家疫苗接种对比 -->
-            <div class="chart-container">
-                <h2 class="chart-title" id="countryVaccinationTitle">Country Vaccination Comparison (Top 10)</h2>
-                <canvas id="countryVaccinationChart"></canvas>
-            </div>
-
-            <!-- 图表5: 国家病例对比 -->
-            <div class="chart-container">
-                <h2 class="chart-title" id="countryCasesTitle">Country Total Cases Comparison (Top 10)</h2>
-                <canvas id="countryCasesChart"></canvas>
-            </div>
-
-            <!-- 图表6: 国家死亡对比 -->
-            <div class="chart-container">
-                <h2 class="chart-title" id="countryDeathsTitle">Country Total Deaths Comparison (Top 10)</h2>
-                <canvas id="countryDeathsChart"></canvas>
+            <!-- 图表4: Vaccinations and Death Relations -->
+            <div class="chart-container full-width">
+                <h2 class="chart-title">4. Vaccinations and Death Relations</h2>
+                <canvas id="vaccinationDeathRelationChart"></canvas>
             </div>
         </div>
     </div>

@@ -40,44 +40,80 @@ async function loadData() {
 
 // 创建所有图表
 function createCharts() {
-    createTimeSeriesChart();
-    createVaccinationChart();
-    createVaccineTypeChart();
-    createCountryCharts();
+    createVaccinationOverTimeChart();
+    createDeathOverTimeChart();
+    createSpatialPatternsChart();
+    createVaccinationDeathRelationChart();
 }
 
-// 图表1: 时间序列 - 累计病例和死亡
-function createTimeSeriesChart() {
-    const dates = filteredSummaryData.map(d => new Date(d.date).toLocaleDateString('zh-CN'));
-    const cases = filteredSummaryData.map(d => d.Cumulative_cases);
-    const deaths = filteredSummaryData.map(d => d.Cumulative_deaths);
+// 图表1: Vaccination Over Time Across Countries
+function createVaccinationOverTimeChart() {
+    // 按国家和日期组织数据
+    const countryTimeData = {};
+    const allDates = new Set();
+    
+    filteredCountryData.forEach(item => {
+        if (item.country && item.date && item.total_vaccinations !== null && item.total_vaccinations !== undefined) {
+            const date = new Date(item.date).toISOString().split('T')[0];
+            allDates.add(date);
+            
+            if (!countryTimeData[item.country]) {
+                countryTimeData[item.country] = {};
+            }
+            // 使用最大值（累计值）
+            if (!countryTimeData[item.country][date] || item.total_vaccinations > countryTimeData[item.country][date]) {
+                countryTimeData[item.country][date] = item.total_vaccinations;
+            }
+        }
+    });
 
-    if (chartInstances.timeSeriesChart) {
-        chartInstances.timeSeriesChart.destroy();
+    // 获取前N个国家（按最终累计疫苗接种数）
+    const topN = parseInt(document.getElementById('topN').value);
+    const countryTotals = Object.entries(countryTimeData).map(([country, dates]) => {
+        const maxVaccination = Math.max(...Object.values(dates));
+        return [country, maxVaccination];
+    }).sort((a, b) => b[1] - a[1]).slice(0, topN);
+
+    const selectedCountries = countryTotals.map(c => c[0]);
+    
+    // 排序日期
+    const sortedDates = Array.from(allDates).sort();
+    const displayDates = sortedDates.filter((_, i) => i % 30 === 0); // 每30个点显示一个
+
+    // 生成颜色
+    const colors = [
+        'rgb(54, 162, 235)', 'rgb(255, 99, 132)', 'rgb(75, 192, 192)', 
+        'rgb(255, 206, 86)', 'rgb(153, 102, 255)', 'rgb(255, 159, 64)',
+        'rgb(199, 199, 199)', 'rgb(83, 102, 255)', 'rgb(255, 99, 255)', 
+        'rgb(99, 255, 132)', 'rgb(255, 159, 64)', 'rgb(54, 162, 235)',
+        'rgb(255, 99, 132)', 'rgb(75, 192, 192)', 'rgb(255, 206, 86)',
+        'rgb(153, 102, 255)', 'rgb(255, 159, 64)', 'rgb(199, 199, 199)',
+        'rgb(83, 102, 255)', 'rgb(255, 99, 255)'
+    ];
+
+    const datasets = selectedCountries.map((country, index) => {
+        const data = displayDates.map(date => {
+            return countryTimeData[country][date] || null;
+        });
+        return {
+            label: country,
+            data: data,
+            borderColor: colors[index % colors.length],
+            backgroundColor: colors[index % colors.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+            tension: 0.4,
+            fill: false
+        };
+    });
+
+    if (chartInstances.vaccinationOverTimeChart) {
+        chartInstances.vaccinationOverTimeChart.destroy();
     }
 
-    chartInstances.timeSeriesChart = new Chart(document.getElementById('timeSeriesChart'), {
+    chartInstances.vaccinationOverTimeChart = new Chart(document.getElementById('vaccinationOverTimeChart'), {
         type: 'line',
         data: {
-            labels: dates.filter((_, i) => i % 30 === 0), // 每30个点显示一个标签
-            datasets: [
-                {
-                    label: 'Total Cases',
-                    data: cases.filter((_, i) => i % 30 === 0),
-                    borderColor: 'rgb(75, 192, 192)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    tension: 0.4,
-                    fill: true
-                },
-                {
-                    label: 'Total Deaths',
-                    data: deaths.filter((_, i) => i % 30 === 0),
-                    borderColor: 'rgb(255, 99, 132)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                    tension: 0.4,
-                    fill: true
-                }
-            ]
+            labels: displayDates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+            datasets: datasets
         },
         options: {
             responsive: true,
@@ -85,202 +121,21 @@ function createTimeSeriesChart() {
             plugins: {
                 legend: {
                     position: 'top',
+                    labels: {
+                        boxWidth: 12,
+                        font: { size: 10 }
+                    }
                 },
                 tooltip: {
                     mode: 'index',
                     intersect: false,
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return (value / 1000000).toFixed(1) + 'M';
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-
-// 图表2: 时间序列 - 疫苗接种
-function createVaccinationChart() {
-    const dates = filteredSummaryData.map(d => new Date(d.date).toLocaleDateString('zh-CN'));
-    const vaccinations = filteredSummaryData.map(d => d.total_vaccinations);
-
-    if (chartInstances.vaccinationChart) {
-        chartInstances.vaccinationChart.destroy();
-    }
-
-    chartInstances.vaccinationChart = new Chart(document.getElementById('vaccinationChart'), {
-        type: 'line',
-        data: {
-            labels: dates.filter((_, i) => i % 30 === 0),
-            datasets: [{
-                label: 'Total Vaccinations',
-                data: vaccinations.filter((_, i) => i % 30 === 0),
-                borderColor: 'rgb(54, 162, 235)',
-                backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return (value / 1000000000).toFixed(2) + 'B';
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-
-// 图表3: 疫苗类型分布
-function createVaccineTypeChart() {
-    // 按疫苗类型汇总
-    const vaccineStats = {};
-    filteredVaccineData.forEach(item => {
-        if (item.vaccine && item.total_vaccinations) {
-            if (!vaccineStats[item.vaccine]) {
-                vaccineStats[item.vaccine] = 0;
-            }
-            vaccineStats[item.vaccine] += item.total_vaccinations;
-        }
-    });
-
-    // 排序并取前N
-    const topN = parseInt(document.getElementById('topN').value);
-    const sorted = Object.entries(vaccineStats)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, topN);
-
-    if (chartInstances.vaccineTypeChart) {
-        chartInstances.vaccineTypeChart.destroy();
-    }
-
-    const colors = [
-        'rgba(255, 99, 132, 0.8)',
-        'rgba(54, 162, 235, 0.8)',
-        'rgba(255, 206, 86, 0.8)',
-        'rgba(75, 192, 192, 0.8)',
-        'rgba(153, 102, 255, 0.8)',
-        'rgba(255, 159, 64, 0.8)',
-        'rgba(199, 199, 199, 0.8)',
-        'rgba(83, 102, 255, 0.8)',
-        'rgba(255, 99, 255, 0.8)',
-        'rgba(99, 255, 132, 0.8)'
-    ];
-
-    chartInstances.vaccineTypeChart = new Chart(document.getElementById('vaccineTypeChart'), {
-        type: 'pie',
-        data: {
-            labels: sorted.map(item => item[0]),
-            datasets: [{
-                data: sorted.map(item => item[1]),
-                backgroundColor: colors,
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    position: 'right',
-                },
-                tooltip: {
                     callbacks: {
                         label: function(context) {
-                            const value = context.parsed;
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((value / total) * 100).toFixed(1);
-                            return context.label + ': ' + (value / 1000000).toFixed(1) + 'M (' + percentage + '%)';
+                            const value = context.parsed.y;
+                            if (value === null) return context.dataset.label + ': No data';
+                            return context.dataset.label + ': ' + (value / 1000000).toFixed(1) + 'M';
                         }
                     }
-                }
-            }
-        }
-    });
-}
-
-// 图表4-6: 国家对比图表
-function createCountryCharts() {
-    // 按国家汇总数据
-    const countryStats = {};
-    filteredCountryData.forEach(item => {
-        if (item.country) {
-            if (!countryStats[item.country]) {
-                countryStats[item.country] = {
-                    vaccinations: 0,
-                    cases: 0,
-                    deaths: 0
-                };
-            }
-            if (item.total_vaccinations) {
-                countryStats[item.country].vaccinations = Math.max(
-                    countryStats[item.country].vaccinations,
-                    item.total_vaccinations
-                );
-            }
-            if (item.Cumulative_cases) {
-                countryStats[item.country].cases = Math.max(
-                    countryStats[item.country].cases,
-                    item.Cumulative_cases
-                );
-            }
-            if (item.Cumulative_deaths) {
-                countryStats[item.country].deaths = Math.max(
-                    countryStats[item.country].deaths,
-                    item.Cumulative_deaths
-                );
-            }
-        }
-    });
-
-    // 疫苗接种对比
-    const topN = parseInt(document.getElementById('topN').value);
-    const topVaccinations = Object.entries(countryStats)
-        .map(([country, stats]) => [country, stats.vaccinations])
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, topN);
-
-    if (chartInstances.countryVaccinationChart) {
-        chartInstances.countryVaccinationChart.destroy();
-    }
-
-    chartInstances.countryVaccinationChart = new Chart(document.getElementById('countryVaccinationChart'), {
-        type: 'bar',
-        data: {
-            labels: topVaccinations.map(item => item[0]),
-            datasets: [{
-                label: 'Total Vaccinations',
-                data: topVaccinations.map(item => item[1]),
-                backgroundColor: 'rgba(54, 162, 235, 0.8)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
                 }
             },
             scales: {
@@ -295,35 +150,95 @@ function createCountryCharts() {
             }
         }
     });
+}
 
-    // 病例对比
-    const topCases = Object.entries(countryStats)
-        .map(([country, stats]) => [country, stats.cases])
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, topN);
+// 图表2: Death Populations Over Time
+function createDeathOverTimeChart() {
+    // 按国家和日期组织死亡数据
+    const countryDeathData = {};
+    const allDates = new Set();
+    
+    filteredCountryData.forEach(item => {
+        if (item.country && item.date && item.Cumulative_deaths !== null && item.Cumulative_deaths !== undefined) {
+            const date = new Date(item.date).toISOString().split('T')[0];
+            allDates.add(date);
+            
+            if (!countryDeathData[item.country]) {
+                countryDeathData[item.country] = {};
+            }
+            // 使用最大值（累计值）
+            if (!countryDeathData[item.country][date] || item.Cumulative_deaths > countryDeathData[item.country][date]) {
+                countryDeathData[item.country][date] = item.Cumulative_deaths;
+            }
+        }
+    });
 
-    if (chartInstances.countryCasesChart) {
-        chartInstances.countryCasesChart.destroy();
+    // 获取前N个国家（按最终累计死亡数）
+    const topN = parseInt(document.getElementById('topN').value);
+    const countryTotals = Object.entries(countryDeathData).map(([country, dates]) => {
+        const maxDeaths = Math.max(...Object.values(dates));
+        return [country, maxDeaths];
+    }).sort((a, b) => b[1] - a[1]).slice(0, topN);
+
+    const selectedCountries = countryTotals.map(c => c[0]);
+    
+    // 排序日期
+    const sortedDates = Array.from(allDates).sort();
+    const displayDates = sortedDates.filter((_, i) => i % 30 === 0);
+
+    // 生成颜色
+    const colors = [
+        'rgb(255, 99, 132)', 'rgb(54, 162, 235)', 'rgb(75, 192, 192)', 
+        'rgb(255, 206, 86)', 'rgb(153, 102, 255)', 'rgb(255, 159, 64)',
+        'rgb(199, 199, 199)', 'rgb(83, 102, 255)', 'rgb(255, 99, 255)', 
+        'rgb(99, 255, 132)'
+    ];
+
+    const datasets = selectedCountries.map((country, index) => {
+        const data = displayDates.map(date => {
+            return countryDeathData[country][date] || null;
+        });
+        return {
+            label: country,
+            data: data,
+            borderColor: colors[index % colors.length],
+            backgroundColor: colors[index % colors.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+            tension: 0.4,
+            fill: false
+        };
+    });
+
+    if (chartInstances.deathOverTimeChart) {
+        chartInstances.deathOverTimeChart.destroy();
     }
 
-    chartInstances.countryCasesChart = new Chart(document.getElementById('countryCasesChart'), {
-        type: 'bar',
+    chartInstances.deathOverTimeChart = new Chart(document.getElementById('deathOverTimeChart'), {
+        type: 'line',
         data: {
-            labels: topCases.map(item => item[0]),
-            datasets: [{
-                label: 'Total Cases',
-                data: topCases.map(item => item[1]),
-                backgroundColor: 'rgba(75, 192, 192, 0.8)',
-                borderColor: 'rgba(75, 192, 192, 1)',
-                borderWidth: 1
-            }]
+            labels: displayDates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+            datasets: datasets
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
                 legend: {
-                    display: false
+                    position: 'top',
+                    labels: {
+                        boxWidth: 12,
+                        font: { size: 10 }
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.parsed.y;
+                            if (value === null) return context.dataset.label + ': No data';
+                            return context.dataset.label + ': ' + (value / 1000).toFixed(0) + 'K';
+                        }
+                    }
                 }
             },
             scales: {
@@ -331,34 +246,75 @@ function createCountryCharts() {
                     beginAtZero: true,
                     ticks: {
                         callback: function(value) {
-                            return (value / 1000000).toFixed(1) + 'M';
+                            return (value / 1000).toFixed(0) + 'K';
                         }
                     }
                 }
             }
         }
     });
+}
 
-    // 死亡对比
-    const topDeaths = Object.entries(countryStats)
-        .map(([country, stats]) => [country, stats.deaths])
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, topN);
+// 图表3: Global Spatial Patterns of Vaccination and Mortality
+function createSpatialPatternsChart() {
+    // 按国家汇总最新数据
+    const countryStats = {};
+    
+    filteredCountryData.forEach(item => {
+        if (item.country) {
+            if (!countryStats[item.country]) {
+                countryStats[item.country] = {
+                    vaccinations: 0,
+                    deaths: 0,
+                    cases: 0
+                };
+            }
+            if (item.total_vaccinations) {
+                countryStats[item.country].vaccinations = Math.max(
+                    countryStats[item.country].vaccinations,
+                    item.total_vaccinations
+                );
+            }
+            if (item.Cumulative_deaths) {
+                countryStats[item.country].deaths = Math.max(
+                    countryStats[item.country].deaths,
+                    item.Cumulative_deaths
+                );
+            }
+            if (item.Cumulative_cases) {
+                countryStats[item.country].cases = Math.max(
+                    countryStats[item.country].cases,
+                    item.Cumulative_cases
+                );
+            }
+        }
+    });
 
-    if (chartInstances.countryDeathsChart) {
-        chartInstances.countryDeathsChart.destroy();
+    // 转换为散点图数据格式
+    const scatterData = Object.entries(countryStats)
+        .filter(([country, stats]) => stats.vaccinations > 0 && stats.deaths > 0)
+        .map(([country, stats]) => ({
+            x: stats.vaccinations,
+            y: stats.deaths,
+            country: country,
+            cases: stats.cases
+        }));
+
+    if (chartInstances.spatialPatternsChart) {
+        chartInstances.spatialPatternsChart.destroy();
     }
 
-    chartInstances.countryDeathsChart = new Chart(document.getElementById('countryDeathsChart'), {
-        type: 'bar',
+    chartInstances.spatialPatternsChart = new Chart(document.getElementById('spatialPatternsChart'), {
+        type: 'scatter',
         data: {
-            labels: topDeaths.map(item => item[0]),
             datasets: [{
-                label: 'Total Deaths',
-                data: topDeaths.map(item => item[1]),
-                backgroundColor: 'rgba(255, 99, 132, 0.8)',
-                borderColor: 'rgba(255, 99, 132, 1)',
-                borderWidth: 1
+                label: 'Countries',
+                data: scatterData,
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1,
+                pointRadius: 6,
+                pointHoverRadius: 8
             }]
         },
         options: {
@@ -367,11 +323,143 @@ function createCountryCharts() {
             plugins: {
                 legend: {
                     display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].raw.country;
+                        },
+                        label: function(context) {
+                            const data = context[0].raw;
+                            return [
+                                'Vaccinations: ' + (data.x / 1000000).toFixed(1) + 'M',
+                                'Deaths: ' + (data.y / 1000).toFixed(0) + 'K',
+                                'Cases: ' + (data.cases / 1000000).toFixed(1) + 'M'
+                            ];
+                        }
+                    }
                 }
             },
             scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Total Vaccinations'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return (value / 1000000).toFixed(0) + 'M';
+                        }
+                    }
+                },
                 y: {
-                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Total Deaths'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return (value / 1000).toFixed(0) + 'K';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// 图表4: Vaccinations and Death Relations
+function createVaccinationDeathRelationChart() {
+    // 按国家汇总最新数据
+    const countryStats = {};
+    
+    filteredCountryData.forEach(item => {
+        if (item.country) {
+            if (!countryStats[item.country]) {
+                countryStats[item.country] = {
+                    vaccinations: 0,
+                    deaths: 0
+                };
+            }
+            if (item.total_vaccinations) {
+                countryStats[item.country].vaccinations = Math.max(
+                    countryStats[item.country].vaccinations,
+                    item.total_vaccinations
+                );
+            }
+            if (item.Cumulative_deaths) {
+                countryStats[item.country].deaths = Math.max(
+                    countryStats[item.country].deaths,
+                    item.Cumulative_deaths
+                );
+            }
+        }
+    });
+
+    // 转换为散点图数据
+    const scatterData = Object.entries(countryStats)
+        .filter(([country, stats]) => stats.vaccinations > 0 && stats.deaths > 0)
+        .map(([country, stats]) => ({
+            x: stats.vaccinations,
+            y: stats.deaths,
+            country: country
+        }));
+
+    if (chartInstances.vaccinationDeathRelationChart) {
+        chartInstances.vaccinationDeathRelationChart.destroy();
+    }
+
+    chartInstances.vaccinationDeathRelationChart = new Chart(document.getElementById('vaccinationDeathRelationChart'), {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Countries',
+                data: scatterData,
+                backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 1,
+                pointRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].raw.country;
+                        },
+                        label: function(context) {
+                            const data = context.raw;
+                            return [
+                                'Vaccinations: ' + (data.x / 1000000).toFixed(1) + 'M',
+                                'Deaths: ' + (data.y / 1000).toFixed(0) + 'K'
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Total Vaccinations'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return (value / 1000000).toFixed(0) + 'M';
+                        }
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Total Deaths'
+                    },
                     ticks: {
                         callback: function(value) {
                             return (value / 1000).toFixed(0) + 'K';
@@ -466,11 +554,7 @@ function applyFilters() {
         filteredVaccineData = vaccineData.filter(d => d.location === country);
     }
 
-    // 更新标题
-    document.getElementById('vaccineTypeTitle').textContent = `Vaccine Type Distribution (Top ${topN})`;
-    document.getElementById('countryVaccinationTitle').textContent = `Country Vaccination Comparison (Top ${topN})`;
-    document.getElementById('countryCasesTitle').textContent = `Country Total Cases Comparison (Top ${topN})`;
-    document.getElementById('countryDeathsTitle').textContent = `Country Total Deaths Comparison (Top ${topN})`;
+    // 图表标题不需要更新，因为它们是固定的
 
     // 更新统计
     updateStats();
@@ -500,12 +584,6 @@ function resetFilters() {
     filteredSummaryData = [...summaryData];
     filteredVaccineData = [...vaccineData];
     filteredCountryData = [...countryData];
-
-    // 更新标题
-    document.getElementById('vaccineTypeTitle').textContent = 'Vaccine Type Distribution (Top 10)';
-    document.getElementById('countryVaccinationTitle').textContent = 'Country Vaccination Comparison (Top 10)';
-    document.getElementById('countryCasesTitle').textContent = 'Country Total Cases Comparison (Top 10)';
-    document.getElementById('countryDeathsTitle').textContent = 'Country Total Deaths Comparison (Top 10)';
 
     updateStats();
 
