@@ -8,6 +8,7 @@ let filteredCountryData = [];
 let chartInstances = {};
 let mapInstance = null;
 let mapMarkers = [];
+let missingIsoLogged = false;
 
 // ISO代码到坐标的映射（使用ISO 3166-1 alpha-3代码）
 const isoCodeCoordinates = {
@@ -659,6 +660,15 @@ function updateMap() {
     
     // 找到最大死亡数用于颜色映射
     const maxDeaths = Math.max(...Object.values(dateData).map(d => d.deaths), 1);
+
+    // 记录缺失坐标的iso_code，方便补充
+    if (!missingIsoLogged) {
+        const missing = Object.keys(dateData).filter(code => !isoCodeCoordinates[code]);
+        if (missing.length) {
+            console.warn('缺少坐标的 ISO 代码（未显示在地图上）:', missing);
+        }
+        missingIsoLogged = true;
+    }
     
     // 为每个国家添加标记
     Object.entries(dateData).forEach(([isoCode, data]) => {
