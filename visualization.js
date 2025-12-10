@@ -605,16 +605,51 @@ function updateMap() {
     const selectedDate = document.getElementById('mapDate').value;
     if (!selectedDate) return;
     
-    // 获取选定日期的数据
-    const dateData = {};
+    const selectedDateObj = new Date(selectedDate);
+    
+    // 获取选定日期及之前的数据（用于向前填充）
+    // 按国家组织数据，每个国家存储日期和累计死亡数的映射
+    const countryDateData = {};
+    
     filteredCountryData.forEach(item => {
         if (item.date && item.country && item.Cumulative_deaths !== null && item.Cumulative_deaths !== undefined) {
             const itemDate = new Date(item.date).toISOString().split('T')[0];
-            if (itemDate === selectedDate) {
-                if (!dateData[item.country] || item.Cumulative_deaths > dateData[item.country]) {
-                    dateData[item.country] = item.Cumulative_deaths;
+            const itemDateObj = new Date(item.date);
+            
+            // 只处理选定日期及之前的数据
+            if (itemDateObj <= selectedDateObj) {
+                if (!countryDateData[item.country]) {
+                    countryDateData[item.country] = {};
+                }
+                
+                // 如果同一天有多条记录，取最大的累计死亡数
+                if (!countryDateData[item.country][itemDate] || 
+                    item.Cumulative_deaths > countryDateData[item.country][itemDate]) {
+                    countryDateData[item.country][itemDate] = item.Cumulative_deaths;
                 }
             }
+        }
+    });
+    
+    // 为每个国家找到选定日期或最近日期的数据
+    const dateData = {};
+    Object.keys(countryDateData).forEach(country => {
+        const dates = Object.keys(countryDateData[country])
+            .map(d => new Date(d))
+            .sort((a, b) => b - a); // 从新到旧排序
+        
+        // 找到选定日期或最近的数据
+        let targetDate = null;
+        for (let date of dates) {
+            if (date <= selectedDateObj) {
+                targetDate = date.toISOString().split('T')[0];
+                break;
+            }
+        }
+        
+        // 如果找到了数据，使用它
+        if (targetDate && countryDateData[country][targetDate]) {
+            dateData[country] = countryDateData[country][targetDate];
         }
     });
     
