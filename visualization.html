@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>COVID-19 Data Explorer</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -19,10 +21,9 @@
             <!-- 控制面板 -->
             <div class="controls">
                 <div class="control-group">
-                    <label>Country Filter:</label>
-                    <select id="countryFilter">
-                        <option value="all">All Countries</option>
-                    </select>
+                    <label>Select Date for Map:</label>
+                    <input type="date" id="mapDate">
+                    <button class="btn" onclick="updateMap()">Update Map</button>
                 </div>
                 <div class="control-group">
                     <label>Date Range:</label>
@@ -41,6 +42,12 @@
                 </div>
                 <button class="btn" onclick="applyFilters()">Apply Filters</button>
                 <button class="btn" onclick="resetFilters()">Reset</button>
+            </div>
+
+            <!-- 地图容器 -->
+            <div class="chart-container full-width">
+                <h2 class="chart-title">Deaths by Country on Selected Date</h2>
+                <div id="map" style="height: 500px; width: 100%; border-radius: 10px;"></div>
             </div>
 
             <div class="charts-grid" id="chartsContainer">
