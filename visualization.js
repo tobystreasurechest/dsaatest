@@ -660,37 +660,33 @@ function updateMap() {
     Object.entries(dateData).forEach(([country, deaths]) => {
         const coords = countryCoordinates[country];
         if (coords && deaths > 0) {
-            // 根据死亡数计算颜色：从浅色（粉色/白色）到深色（红色/深红）
-            // 死亡数少的用浅粉色，死亡数多的用深红色
+            // 将死亡数分成5个等级
             const intensity = Math.min(deaths / maxDeaths, 1);
+            let color;
             
-            // 颜色渐变：从浅粉色(255, 192, 203)到深红色(139, 0, 0)
-            // 或者从白色/浅粉色到深红色
-            let r, g, b;
-            if (intensity < 0.3) {
-                // 低死亡数：浅粉色到粉色
-                const t = intensity / 0.3;
-                r = Math.floor(255 - t * 50); // 255 -> 205
-                g = Math.floor(240 - t * 100); // 240 -> 140
-                b = Math.floor(245 - t * 100); // 245 -> 145
-            } else if (intensity < 0.7) {
-                // 中等死亡数：粉色到红色
-                const t = (intensity - 0.3) / 0.4;
-                r = Math.floor(205 + t * 50); // 205 -> 255
-                g = Math.floor(140 - t * 140); // 140 -> 0
-                b = Math.floor(145 - t * 145); // 145 -> 0
+            // 5个颜色等级：从浅到深
+            if (intensity < 0.2) {
+                // 等级1：非常浅的粉色（死亡数最少）
+                color = 'rgb(255, 240, 245)';
+            } else if (intensity < 0.4) {
+                // 等级2：浅粉色
+                color = 'rgb(255, 182, 193)';
+            } else if (intensity < 0.6) {
+                // 等级3：粉色
+                color = 'rgb(255, 105, 180)';
+            } else if (intensity < 0.8) {
+                // 等级4：红色
+                color = 'rgb(220, 20, 60)';
             } else {
-                // 高死亡数：红色到深红色
-                const t = (intensity - 0.7) / 0.3;
-                r = Math.floor(255 - t * 116); // 255 -> 139
-                g = Math.floor(0);
-                b = Math.floor(0);
+                // 等级5：深红色（死亡数最多）
+                color = 'rgb(139, 0, 0)';
             }
             
-            const color = `rgb(${r}, ${g}, ${b})`;
-            
-            // 计算标记大小（增大半径）
-            const radius = Math.max(8, Math.min(50, Math.sqrt(deaths) / 60));
+            // 计算标记大小：让死亡数对半径的影响更明显
+            // 使用线性比例，让不同死亡数的半径差异更明显
+            const normalizedSize = deaths / maxDeaths; // 0到1之间
+            // 半径范围：最小5，最大35，所以范围是30 (35-5=30)
+            const radius = Math.max(5, Math.min(35, 5 + normalizedSize * 30)); // 从5到35，线性映射
             
             const circle = L.circleMarker(coords, {
                 radius: radius,
