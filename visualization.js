@@ -608,7 +608,8 @@ function updateMap() {
     // 使用ISO代码作为键，存储国家名称、日期和累计死亡数的映射
     const isoDateData = {};
     
-    filteredCountryData.forEach(item => {
+    // 使用完整数据集（countryData），不受时间过滤限制，以便向前填充
+    countryData.forEach(item => {
         if (item.date && item.iso_code && item.country && item.Cumulative_deaths !== null && item.Cumulative_deaths !== undefined) {
             const itemDate = new Date(item.date).toISOString().split('T')[0];
             const itemDateObj = new Date(item.date);
