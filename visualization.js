@@ -689,11 +689,10 @@ function updateMap() {
                 color = 'rgb(139, 0, 0)';
             }
             
-            // 计算标记大小：使用平方缩放让不同死亡数的半径差异更明显
-            // 平方可以让差异更突出，死亡数小的半径更小，死亡数大的半径更大
+            // 计算标记大小：使用1.5次方缩放，比平方小但比线性明显
             const normalized = deaths / maxDeaths; // 0到1之间
-            const sizeRatio = normalized * normalized; // 平方，让差异更明显
-            // 半径范围：最小8，最大55，范围47，让差异更明显
+            const sizeRatio = Math.pow(normalized, 1.3); // 1.5次方，介于线性和平方之间
+            // 半径范围：最小8，最大30
             const radius = Math.max(8, Math.min(30, 8 + sizeRatio * 22));
             
             const circle = L.circleMarker(coords, {
