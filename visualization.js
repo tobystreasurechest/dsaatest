@@ -143,6 +143,8 @@ function createCharts() {
     createVaccinationOverTimeChart();
     createVaccinationDeathOverTimeChart();
     createVaccinationDeathRelationChart();
+    createMediumRangeSubChart();
+    createHighRangeSubChart();
     createChinaIndiaSubChart();
 }
 
@@ -477,8 +479,8 @@ function createVaccinationDeathRelationChart() {
         }
     });
 
-    // 转换为散点图数据，排除中国和印度
-    const otherCountriesData = [];
+    // 转换为散点图数据，排除中国和印度，并按数值范围分组
+    const allOtherCountriesData = [];
     
     // 先检查是否有中国和印度的数据
     const hasChina = countryStats['China'] && countryStats['China'].vaccinations > 0 && countryStats['China'].deaths > 0;
@@ -497,26 +499,61 @@ function createVaccinationDeathRelationChart() {
                 y: stats.deaths,
                 country: country
             };
-            otherCountriesData.push(point);
+            allOtherCountriesData.push(point);
         });
     
+    // 计算数值范围，用于分组
+    const vaccinations = allOtherCountriesData.map(p => p.x);
+    const deaths = allOtherCountriesData.map(p => p.y);
+    const maxVaccinations = Math.max(...vaccinations, 1);
+    const maxDeaths = Math.max(...deaths, 1);
+    
+    // 定义范围阈值（基于疫苗接种数和死亡数的组合值）
+    const combinedValues = allOtherCountriesData.map(p => Math.sqrt(p.x * p.y));
+    const sortedCombined = [...combinedValues].sort((a, b) => a - b);
+    const lowThreshold = sortedCombined[Math.floor(sortedCombined.length * 0.33)]; // 33%分位
+    const highThreshold = sortedCombined[Math.floor(sortedCombined.length * 0.67)]; // 67%分位
+    
+    // 分组数据
+    const lowRangeData = [];
+    const mediumRangeData = [];
+    const highRangeData = [];
+    
+    allOtherCountriesData.forEach(point => {
+        const combined = Math.sqrt(point.x * point.y);
+        if (combined <= lowThreshold) {
+            lowRangeData.push(point);
+        } else if (combined <= highThreshold) {
+            mediumRangeData.push(point);
+        } else {
+            highRangeData.push(point);
+        }
+    });
+    
     // 调试信息
-    if (hasChina || hasIndia) {
-        console.log('主图表排除的国家:', hasChina ? 'China' : '', hasIndia ? 'India' : '');
-        console.log('主图表数据点数量:', otherCountriesData.length);
-    }
+    console.log('数据分组:', {
+        low: lowRangeData.length,
+        medium: mediumRangeData.length,
+        high: highRangeData.length
+    });
 
     if (chartInstances.vaccinationDeathRelationChart) {
         chartInstances.vaccinationDeathRelationChart.destroy();
     }
 
-    chartInstances.vaccinationDeathRelationChart = new Chart(document.getElementById('vaccinationDeathRelationChart'), {
+    const canvas = document.getElementById('vaccinationDeathRelationChart');
+    if (!canvas) {
+        console.error('Canvas element not found: vaccinationDeathRelationChart');
+        return;
+    }
+
+    chartInstances.vaccinationDeathRelationChart = new Chart(canvas, {
         type: 'scatter',
         data: {
             datasets: [
                 {
                     label: 'Countries',
-                    data: otherCountriesData,
+                    data: lowRangeData,
                     backgroundColor: 'rgba(75, 192, 192, 0.5)',
                     borderColor: 'rgba(75, 192, 192, 1)',
                     borderWidth: 1.5,
@@ -564,6 +601,234 @@ function createVaccinationDeathRelationChart() {
                         display: true,
                         text: 'Total Deaths'
                     },
+                    ticks: {
+                        callback: function(value) {
+                            return (value / 1000).toFixed(0) + 'K';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// 中值范围子图
+function createMediumRangeSubChart() {
+    // 获取分组数据（需要从主函数中获取，这里重新计算）
+    const countryStats = {};
+    
+    filteredCountryData.forEach(item => {
+        if (item.country) {
+            if (!countryStats[item.country]) {
+                countryStats[item.country] = {
+                    vaccinations: 0,
+                    deaths: 0
+                };
+            }
+            if (item.total_vaccinations) {
+                countryStats[item.country].vaccinations = Math.max(
+                    countryStats[item.country].vaccinations,
+                    item.total_vaccinations
+                );
+            }
+            if (item.Cumulative_deaths) {
+                countryStats[item.country].deaths = Math.max(
+                    countryStats[item.country].deaths,
+                    item.Cumulative_deaths
+                );
+            }
+        }
+    });
+
+    const allOtherCountriesData = [];
+    Object.entries(countryStats)
+        .filter(([country, stats]) => {
+            const isExcluded = country === 'China' || country === 'India';
+            const hasData = stats.vaccinations > 0 && stats.deaths > 0;
+            return !isExcluded && hasData;
+        })
+        .forEach(([country, stats]) => {
+            allOtherCountriesData.push({
+                x: stats.vaccinations,
+                y: stats.deaths,
+                country: country
+            });
+        });
+
+    const combinedValues = allOtherCountriesData.map(p => Math.sqrt(p.x * p.y));
+    const sortedCombined = [...combinedValues].sort((a, b) => a - b);
+    const lowThreshold = sortedCombined[Math.floor(sortedCombined.length * 0.33)];
+    const highThreshold = sortedCombined[Math.floor(sortedCombined.length * 0.67)];
+
+    const mediumRangeData = allOtherCountriesData.filter(point => {
+        const combined = Math.sqrt(point.x * point.y);
+        return combined > lowThreshold && combined <= highThreshold;
+    });
+
+    if (chartInstances.mediumRangeSubChart) {
+        chartInstances.mediumRangeSubChart.destroy();
+    }
+
+    const canvas = document.getElementById('mediumRangeSubChart');
+    if (!canvas) return;
+
+    chartInstances.mediumRangeSubChart = new Chart(canvas, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Countries',
+                data: mediumRangeData,
+                backgroundColor: 'rgba(255, 206, 86, 0.5)',
+                borderColor: 'rgba(255, 206, 86, 1)',
+                borderWidth: 1.5,
+                pointRadius: 6,
+                pointHoverRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].raw.country;
+                        },
+                        label: function(context) {
+                            const data = context.raw;
+                            return [
+                                'Vaccinations: ' + (data.x / 1000000).toFixed(1) + 'M',
+                                'Deaths: ' + (data.y / 1000).toFixed(0) + 'K'
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Total Vaccinations' },
+                    ticks: {
+                        callback: function(value) {
+                            return (value / 1000000).toFixed(0) + 'M';
+                        }
+                    }
+                },
+                y: {
+                    title: { display: true, text: 'Total Deaths' },
+                    ticks: {
+                        callback: function(value) {
+                            return (value / 1000).toFixed(0) + 'K';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// 高值范围子图
+function createHighRangeSubChart() {
+    const countryStats = {};
+    
+    filteredCountryData.forEach(item => {
+        if (item.country) {
+            if (!countryStats[item.country]) {
+                countryStats[item.country] = {
+                    vaccinations: 0,
+                    deaths: 0
+                };
+            }
+            if (item.total_vaccinations) {
+                countryStats[item.country].vaccinations = Math.max(
+                    countryStats[item.country].vaccinations,
+                    item.total_vaccinations
+                );
+            }
+            if (item.Cumulative_deaths) {
+                countryStats[item.country].deaths = Math.max(
+                    countryStats[item.country].deaths,
+                    item.Cumulative_deaths
+                );
+            }
+        }
+    });
+
+    const allOtherCountriesData = [];
+    Object.entries(countryStats)
+        .filter(([country, stats]) => {
+            const isExcluded = country === 'China' || country === 'India';
+            const hasData = stats.vaccinations > 0 && stats.deaths > 0;
+            return !isExcluded && hasData;
+        })
+        .forEach(([country, stats]) => {
+            allOtherCountriesData.push({
+                x: stats.vaccinations,
+                y: stats.deaths,
+                country: country
+            });
+        });
+
+    const combinedValues = allOtherCountriesData.map(p => Math.sqrt(p.x * p.y));
+    const sortedCombined = [...combinedValues].sort((a, b) => a - b);
+    const highThreshold = sortedCombined[Math.floor(sortedCombined.length * 0.67)];
+
+    const highRangeData = allOtherCountriesData.filter(point => {
+        const combined = Math.sqrt(point.x * point.y);
+        return combined > highThreshold;
+    });
+
+    if (chartInstances.highRangeSubChart) {
+        chartInstances.highRangeSubChart.destroy();
+    }
+
+    const canvas = document.getElementById('highRangeSubChart');
+    if (!canvas) return;
+
+    chartInstances.highRangeSubChart = new Chart(canvas, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Countries',
+                data: highRangeData,
+                backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 1.5,
+                pointRadius: 7,
+                pointHoverRadius: 9
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].raw.country;
+                        },
+                        label: function(context) {
+                            const data = context.raw;
+                            return [
+                                'Vaccinations: ' + (data.x / 1000000).toFixed(1) + 'M',
+                                'Deaths: ' + (data.y / 1000).toFixed(0) + 'K'
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Total Vaccinations' },
+                    ticks: {
+                        callback: function(value) {
+                            return (value / 1000000).toFixed(0) + 'M';
+                        }
+                    }
+                },
+                y: {
+                    title: { display: true, text: 'Total Deaths' },
                     ticks: {
                         callback: function(value) {
                             return (value / 1000).toFixed(0) + 'K';
@@ -811,9 +1076,15 @@ function updateMap() {
         : maxDeaths * 0.9; // 如果没有足够数据，使用90%作为阈值
 
     // 为每个国家添加标记，并记录缺失坐标的 ISO 代码
+    // 只显示在data.json中有数据的国家（dateData中的国家都来自data.json）
     const missingIso = [];
     Object.entries(dateData).forEach(([isoCode, data]) => {
         const { country, deaths } = data;
+        // 跳过死亡数为0的国家
+        if (deaths === 0 || deaths === null || deaths === undefined) {
+            return;
+        }
+        // 确保这个isoCode在data.json中存在（dateData已经只包含data.json中的国家）
         const coords = isoCodeCoordinates[isoCode];
         if (coords) {
             let color;
@@ -841,14 +1112,14 @@ function updateMap() {
                 const normalized = (deaths - topThreshold) / (maxDeaths - topThreshold); // 0到1之间
                 const sizeRatio = Math.pow(normalized, 0.8); // 稍微压缩，让大值之间也有区别
                 // 半径范围：20到30
-                radius = 15 + sizeRatio * 8;
+                radius = 8 + sizeRatio * 3;
             } else {
                 // 其他95%的值：使用更细致的缩放，让小值之间的差异更明显
                 const normalized = deaths / topThreshold; // 相对于阈值的比例，0到1之间
                 // 使用线性缩放，让小值之间的差异更明显
                 // 不再使用平方根，直接使用线性映射
                 // 半径范围：6到22，增大范围让差异更明显
-                radius = 3 + normalized * 10;
+                radius = 3 + normalized * 5;
             }
             
             const circle = L.circleMarker(coords, {
