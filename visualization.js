@@ -141,7 +141,6 @@ async function loadData() {
 // 创建所有图表
 function createCharts() {
     createVaccinationOverTimeChart();
-    createDeathOverTimeChart();
     createSpatialPatternsChart();
     createVaccinationDeathRelationChart();
 }
@@ -176,9 +175,9 @@ function createVaccinationOverTimeChart() {
 
     const selectedCountries = countryTotals.map(c => c[0]);
     
-    // 排序日期
+    // 排序日期 - 使用所有日期
     const sortedDates = Array.from(allDates).sort();
-    const displayDates = sortedDates.filter((_, i) => i % 30 === 0); // 每30个点显示一个
+    const displayDates = sortedDates; // 显示所有日期
 
     // 生成颜色
     const colors = [
@@ -239,114 +238,22 @@ function createVaccinationOverTimeChart() {
                 }
             },
             scales: {
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45,
+                        autoSkip: true,
+                        maxTicksLimit: 20, // 如果日期太多，自动跳过一些标签
+                        font: {
+                            size: 9
+                        }
+                    }
+                },
                 y: {
                     beginAtZero: true,
                     ticks: {
                         callback: function(value) {
                             return (value / 1000000).toFixed(0) + 'M';
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-
-// 图表2: Death Populations Over Time
-function createDeathOverTimeChart() {
-    // 按国家和日期组织死亡数据
-    const countryDeathData = {};
-    const allDates = new Set();
-    
-    filteredCountryData.forEach(item => {
-        if (item.country && item.date && item.Cumulative_deaths !== null && item.Cumulative_deaths !== undefined) {
-            const date = new Date(item.date).toISOString().split('T')[0];
-            allDates.add(date);
-            
-            if (!countryDeathData[item.country]) {
-                countryDeathData[item.country] = {};
-            }
-            // 使用最大值（累计值）
-            if (!countryDeathData[item.country][date] || item.Cumulative_deaths > countryDeathData[item.country][date]) {
-                countryDeathData[item.country][date] = item.Cumulative_deaths;
-            }
-        }
-    });
-
-    // 获取前N个国家（按最终累计死亡数）
-    const topN = parseInt(document.getElementById('topN').value);
-    const countryTotals = Object.entries(countryDeathData).map(([country, dates]) => {
-        const maxDeaths = Math.max(...Object.values(dates));
-        return [country, maxDeaths];
-    }).sort((a, b) => b[1] - a[1]).slice(0, topN);
-
-    const selectedCountries = countryTotals.map(c => c[0]);
-    
-    // 排序日期
-    const sortedDates = Array.from(allDates).sort();
-    const displayDates = sortedDates.filter((_, i) => i % 30 === 0);
-
-    // 生成颜色
-    const colors = [
-        'rgb(255, 99, 132)', 'rgb(54, 162, 235)', 'rgb(75, 192, 192)', 
-        'rgb(255, 206, 86)', 'rgb(153, 102, 255)', 'rgb(255, 159, 64)',
-        'rgb(199, 199, 199)', 'rgb(83, 102, 255)', 'rgb(255, 99, 255)', 
-        'rgb(99, 255, 132)'
-    ];
-
-    const datasets = selectedCountries.map((country, index) => {
-        const data = displayDates.map(date => {
-            return countryDeathData[country][date] || null;
-        });
-        return {
-            label: country,
-            data: data,
-            borderColor: colors[index % colors.length],
-            backgroundColor: colors[index % colors.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
-            tension: 0.4,
-            fill: false
-        };
-    });
-
-    if (chartInstances.deathOverTimeChart) {
-        chartInstances.deathOverTimeChart.destroy();
-    }
-
-    chartInstances.deathOverTimeChart = new Chart(document.getElementById('deathOverTimeChart'), {
-        type: 'line',
-        data: {
-            labels: displayDates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-            datasets: datasets
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                    labels: {
-                        boxWidth: 12,
-                        font: { size: 10 }
-                    }
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            const value = context.parsed.y;
-                            if (value === null) return context.dataset.label + ': No data';
-                            return context.dataset.label + ': ' + (value / 1000).toFixed(0) + 'K';
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return (value / 1000).toFixed(0) + 'K';
                         }
                     }
                 }
@@ -496,14 +403,29 @@ function createVaccinationDeathRelationChart() {
         }
     });
 
-    // 转换为散点图数据
-    const scatterData = Object.entries(countryStats)
+    // 转换为散点图数据，分离中国、印度和其他国家
+    const chinaData = [];
+    const indiaData = [];
+    const otherCountriesData = [];
+    
+    Object.entries(countryStats)
         .filter(([country, stats]) => stats.vaccinations > 0 && stats.deaths > 0)
-        .map(([country, stats]) => ({
-            x: stats.vaccinations,
-            y: stats.deaths,
-            country: country
-        }));
+        .forEach(([country, stats]) => {
+            const point = {
+                x: stats.vaccinations,
+                y: stats.deaths,
+                country: country
+            };
+            
+            // 分离中国和印度
+            if (country === 'China') {
+                chinaData.push(point);
+            } else if (country === 'India') {
+                indiaData.push(point);
+            } else {
+                otherCountriesData.push(point);
+            }
+        });
 
     if (chartInstances.vaccinationDeathRelationChart) {
         chartInstances.vaccinationDeathRelationChart.destroy();
@@ -512,21 +434,43 @@ function createVaccinationDeathRelationChart() {
     chartInstances.vaccinationDeathRelationChart = new Chart(document.getElementById('vaccinationDeathRelationChart'), {
         type: 'scatter',
         data: {
-            datasets: [{
-                label: 'Countries',
-                data: scatterData,
-                backgroundColor: 'rgba(255, 99, 132, 0.6)',
-                borderColor: 'rgba(255, 99, 132, 1)',
-                borderWidth: 1,
-                pointRadius: 5
-            }]
+            datasets: [
+                {
+                    label: 'China',
+                    data: chinaData,
+                    backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 2,
+                    pointRadius: 10,
+                    pointHoverRadius: 12
+                },
+                {
+                    label: 'India',
+                    data: indiaData,
+                    backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 2,
+                    pointRadius: 10,
+                    pointHoverRadius: 12
+                },
+                {
+                    label: 'Other Countries',
+                    data: otherCountriesData,
+                    backgroundColor: 'rgba(75, 192, 192, 0.4)',
+                    borderColor: 'rgba(75, 192, 192, 0.8)',
+                    borderWidth: 1,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
                 legend: {
-                    display: false
+                    display: true,
+                    position: 'top'
                 },
                 tooltip: {
                     callbacks: {
@@ -670,7 +614,14 @@ function updateMap() {
     });
     
     // 找到最大死亡数用于颜色映射
-    const maxDeaths = Math.max(...Object.values(dateData).map(d => d.deaths), 1);
+    const allDeaths = Object.values(dateData).map(d => d.deaths).filter(d => d > 0);
+    const maxDeaths = Math.max(...allDeaths, 1);
+    
+    // 计算阈值：找出非常大的值（前5%或前10%）
+    const sortedDeaths = [...allDeaths].sort((a, b) => b - a);
+    const topThreshold = sortedDeaths.length > 0 
+        ? sortedDeaths[Math.floor(sortedDeaths.length * 0.05)] // 前5%的阈值
+        : maxDeaths * 0.9; // 如果没有足够数据，使用90%作为阈值
 
     // 为每个国家添加标记，并记录缺失坐标的 ISO 代码
     const missingIso = [];
@@ -680,31 +631,20 @@ function updateMap() {
         if (coords) {
             let color;
             
-            // 韩国和美国使用黄色
-            if (isoCode === 'KOR' || isoCode === 'USA') {
-                color = 'rgb(255, 215, 0)'; // 金黄色
-                console.log("韩国和美国使用黄色", isoCode);
+            if (deaths >= topThreshold) {
+                // 非常大的值使用深红色
+                color = 'rgb(139, 0, 0)'; // 深红色，突出显示非常大的值
             } else {
-                // 其他国家根据死亡数分成5个等级
-                const intensity = Math.min(deaths / maxDeaths, 1);
+                // 其他值使用线性颜色映射（从浅粉色到红色）
+                const intensity = deaths / topThreshold; // 相对于阈值归一化
+                const clampedIntensity = Math.min(intensity, 1); // 限制在0-1之间
                 
-                // 5个颜色等级：从浅到深
-                if (intensity < 0.2) {
-                    // 等级1：非常浅的粉色（死亡数最少）
-                    color = 'rgb(255, 240, 245)';
-                } else if (intensity < 0.4) {
-                    // 等级2：浅粉色
-                    color = 'rgb(255, 182, 193)';
-                } else if (intensity < 0.6) {
-                    // 等级3：粉色
-                    color = 'rgb(255, 105, 180)';
-                } else if (intensity < 0.8) {
-                    // 等级4：红色
-                    color = 'rgb(220, 20, 60)';
-                } else {
-                    // 等级5：深红色（死亡数最多）
-                    color = 'rgb(139, 0, 0)';
-                }
+                // 线性映射：从浅粉色到红色
+                const r = Math.floor(255 - clampedIntensity * 116); // 255 -> 139
+                const g = Math.floor(240 - clampedIntensity * 240); // 240 -> 0
+                const b = Math.floor(245 - clampedIntensity * 245); // 245 -> 0
+                
+                color = `rgb(${r}, ${g}, ${b})`;
             }
             
             // 计算标记大小：使用1.5次方缩放，比平方小但比线性明显
