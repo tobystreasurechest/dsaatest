@@ -333,8 +333,20 @@ function createVaccinationDeathOverTimeChart() {
         return dateData[date] ? dateData[date].deaths : null;
     });
     
+    // 调试信息
+    console.log('Vaccination and Death Over Time Chart Data:');
+    console.log('Total dates:', sortedDates.length);
+    console.log('Sample vaccination data:', vaccinationData.slice(0, 5));
+    console.log('Sample death data:', deathData.slice(0, 5));
+    
     if (chartInstances.vaccinationDeathOverTimeChart) {
         chartInstances.vaccinationDeathOverTimeChart.destroy();
+    }
+    
+    const canvas = document.getElementById('vaccinationDeathOverTimeChart');
+    if (!canvas) {
+        console.error('Canvas element not found: vaccinationDeathOverTimeChart');
+        return;
     }
     
     chartInstances.vaccinationDeathOverTimeChart = new Chart(document.getElementById('vaccinationDeathOverTimeChart'), {
@@ -829,14 +841,14 @@ function updateMap() {
                 const normalized = (deaths - topThreshold) / (maxDeaths - topThreshold); // 0到1之间
                 const sizeRatio = Math.pow(normalized, 0.8); // 稍微压缩，让大值之间也有区别
                 // 半径范围：20到30
-                radius = 16 + sizeRatio * 10;
+                radius = 15 + sizeRatio * 8;
             } else {
                 // 其他95%的值：使用更细致的缩放，让小值之间的差异更明显
                 const normalized = deaths / topThreshold; // 相对于阈值的比例，0到1之间
                 // 使用线性缩放，让小值之间的差异更明显
                 // 不再使用平方根，直接使用线性映射
                 // 半径范围：6到22，增大范围让差异更明显
-                radius = 3 + normalized * 12;
+                radius = 3 + normalized * 10;
             }
             
             const circle = L.circleMarker(coords, {
