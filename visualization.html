@@ -66,7 +66,15 @@
             <!-- 图表4: Vaccinations and Death Relations -->
             <div class="chart-container full-width">
                 <h2 class="chart-title">4. Vaccinations and Death Relations</h2>
-                <canvas id="vaccinationDeathRelationChart"></canvas>
+                <div style="display: flex; gap: 20px; align-items: flex-start;">
+                    <div style="flex: 1;">
+                        <canvas id="vaccinationDeathRelationChart"></canvas>
+                    </div>
+                    <div style="flex: 0 0 400px;">
+                        <h3 style="font-size: 16px; margin-bottom: 10px; text-align: center;">China & India</h3>
+                        <canvas id="chinaIndiaSubChart"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

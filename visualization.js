@@ -143,6 +143,7 @@ function createCharts() {
     createVaccinationOverTimeChart();
     createSpatialPatternsChart();
     createVaccinationDeathRelationChart();
+    createChinaIndiaSubChart();
 }
 
 // 图表1: Vaccination Over Time Across Countries
@@ -403,26 +404,19 @@ function createVaccinationDeathRelationChart() {
         }
     });
 
-    // 转换为散点图数据，分离中国、印度和其他国家
-    const chinaData = [];
-    const indiaData = [];
+    // 转换为散点图数据，排除中国和印度
     const otherCountriesData = [];
     
     Object.entries(countryStats)
         .filter(([country, stats]) => stats.vaccinations > 0 && stats.deaths > 0)
         .forEach(([country, stats]) => {
-            const point = {
-                x: stats.vaccinations,
-                y: stats.deaths,
-                country: country
-            };
-            
-            // 分离中国和印度
-            if (country === 'China') {
-                chinaData.push(point);
-            } else if (country === 'India') {
-                indiaData.push(point);
-            } else {
+            // 排除中国和印度
+            if (country !== 'China' && country !== 'India') {
+                const point = {
+                    x: stats.vaccinations,
+                    y: stats.deaths,
+                    country: country
+                };
                 otherCountriesData.push(point);
             }
         });
@@ -436,13 +430,130 @@ function createVaccinationDeathRelationChart() {
         data: {
             datasets: [
                 {
+                    label: 'Countries',
+                    data: otherCountriesData,
+                    backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1.5,
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].raw.country;
+                        },
+                        label: function(context) {
+                            const data = context.raw;
+                            return [
+                                'Vaccinations: ' + (data.x / 1000000).toFixed(1) + 'M',
+                                'Deaths: ' + (data.y / 1000).toFixed(0) + 'K'
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Total Vaccinations'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return (value / 1000000).toFixed(0) + 'M';
+                        }
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Total Deaths'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return (value / 1000).toFixed(0) + 'K';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// 中国和印度子图
+function createChinaIndiaSubChart() {
+    // 按国家汇总最新数据
+    const countryStats = {};
+    
+    filteredCountryData.forEach(item => {
+        if (item.country) {
+            if (!countryStats[item.country]) {
+                countryStats[item.country] = {
+                    vaccinations: 0,
+                    deaths: 0
+                };
+            }
+            if (item.total_vaccinations) {
+                countryStats[item.country].vaccinations = Math.max(
+                    countryStats[item.country].vaccinations,
+                    item.total_vaccinations
+                );
+            }
+            if (item.Cumulative_deaths) {
+                countryStats[item.country].deaths = Math.max(
+                    countryStats[item.country].deaths,
+                    item.Cumulative_deaths
+                );
+            }
+        }
+    });
+
+    // 只获取中国和印度的数据
+    const chinaData = [];
+    const indiaData = [];
+    
+    Object.entries(countryStats)
+        .filter(([country, stats]) => stats.vaccinations > 0 && stats.deaths > 0)
+        .forEach(([country, stats]) => {
+            const point = {
+                x: stats.vaccinations,
+                y: stats.deaths,
+                country: country
+            };
+            
+            if (country === 'China') {
+                chinaData.push(point);
+            } else if (country === 'India') {
+                indiaData.push(point);
+            }
+        });
+
+    if (chartInstances.chinaIndiaSubChart) {
+        chartInstances.chinaIndiaSubChart.destroy();
+    }
+
+    chartInstances.chinaIndiaSubChart = new Chart(document.getElementById('chinaIndiaSubChart'), {
+        type: 'scatter',
+        data: {
+            datasets: [
+                {
                     label: 'China',
                     data: chinaData,
                     backgroundColor: 'rgba(255, 99, 132, 0.8)',
                     borderColor: 'rgba(255, 99, 132, 1)',
                     borderWidth: 2,
-                    pointRadius: 10,
-                    pointHoverRadius: 12
+                    pointRadius: 12,
+                    pointHoverRadius: 14
                 },
                 {
                     label: 'India',
@@ -450,17 +561,8 @@ function createVaccinationDeathRelationChart() {
                     backgroundColor: 'rgba(54, 162, 235, 0.8)',
                     borderColor: 'rgba(54, 162, 235, 1)',
                     borderWidth: 2,
-                    pointRadius: 10,
-                    pointHoverRadius: 12
-                },
-                {
-                    label: 'Other Countries',
-                    data: otherCountriesData,
-                    backgroundColor: 'rgba(75, 192, 192, 0.4)',
-                    borderColor: 'rgba(75, 192, 192, 0.8)',
-                    borderWidth: 1,
-                    pointRadius: 4,
-                    pointHoverRadius: 6
+                    pointRadius: 12,
+                    pointHoverRadius: 14
                 }
             ]
         },
@@ -647,11 +749,22 @@ function updateMap() {
                 color = `rgb(${r}, ${g}, ${b})`;
             }
             
-            // 计算标记大小：使用1.5次方缩放，比平方小但比线性明显
-            const normalized = deaths / maxDeaths; // 0到1之间
-            const sizeRatio = Math.pow(normalized, 1.3); // 1.5次方，介于线性和平方之间
-            // 半径范围：最小8，最大30
-            const radius = Math.max(8, Math.min(30, 8 + sizeRatio * 22));
+            // 计算标记大小：前5%和其他值使用不同的缩放策略
+            let radius;
+            if (deaths >= topThreshold) {
+                // 前5%的大值：使用基于阈值的缩放
+                const normalized = (deaths - topThreshold) / (maxDeaths - topThreshold); // 0到1之间
+                const sizeRatio = Math.pow(normalized, 0.8); // 稍微压缩，让大值之间也有区别
+                // 半径范围：20到30
+                radius = 20 + sizeRatio * 10;
+            } else {
+                // 其他95%的值：使用更细致的缩放，让小值之间的差异更明显
+                const normalized = deaths / topThreshold; // 相对于阈值的比例，0到1之间
+                // 使用平方根缩放，让小值之间的差异更明显
+                const scaledRatio = Math.sqrt(normalized);
+                // 半径范围：8到20，让小值也能区分
+                radius = 8 + scaledRatio * 12;
+            }
             
             const circle = L.circleMarker(coords, {
                 radius: radius,
