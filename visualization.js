@@ -180,16 +180,27 @@ function createVaccinationOverTimeChart() {
     const sortedDates = Array.from(allDates).sort();
     const displayDates = sortedDates; // 显示所有日期
 
-    // 生成颜色
-    const colors = [
-        'rgb(54, 162, 235)', 'rgb(255, 99, 132)', 'rgb(75, 192, 192)', 
-        'rgb(255, 206, 86)', 'rgb(153, 102, 255)', 'rgb(255, 159, 64)',
-        'rgb(199, 199, 199)', 'rgb(83, 102, 255)', 'rgb(255, 99, 255)', 
-        'rgb(99, 255, 132)', 'rgb(255, 159, 64)', 'rgb(54, 162, 235)',
-        'rgb(255, 99, 132)', 'rgb(75, 192, 192)', 'rgb(255, 206, 86)',
-        'rgb(153, 102, 255)', 'rgb(255, 159, 64)', 'rgb(199, 199, 199)',
-        'rgb(83, 102, 255)', 'rgb(255, 99, 255)'
+    // 生成颜色（降低饱和度）
+    const baseColors = [
+        [54, 162, 235], [255, 99, 132], [75, 192, 192], 
+        [255, 206, 86], [153, 102, 255], [255, 159, 64],
+        [199, 199, 199], [83, 102, 255], [255, 99, 255], 
+        [99, 255, 132], [255, 159, 64], [54, 162, 235],
+        [255, 99, 132], [75, 192, 192], [255, 206, 86],
+        [153, 102, 255], [255, 159, 64], [199, 199, 199],
+        [83, 102, 255], [255, 99, 255]
     ];
+    
+    // 降低饱和度的函数：将颜色向灰色混合
+    const desaturateColor = (r, g, b, factor = 0.5) => {
+        const gray = (r + g + b) / 3;
+        const newR = Math.round(r * (1 - factor) + gray * factor);
+        const newG = Math.round(g * (1 - factor) + gray * factor);
+        const newB = Math.round(b * (1 - factor) + gray * factor);
+        return `rgb(${newR}, ${newG}, ${newB})`;
+    };
+    
+    const colors = baseColors.map(([r, g, b]) => desaturateColor(r, g, b, 0.4));
 
     const datasets = selectedCountries.map((country, index) => {
         const data = displayDates.map(date => {
@@ -407,19 +418,31 @@ function createVaccinationDeathRelationChart() {
     // 转换为散点图数据，排除中国和印度
     const otherCountriesData = [];
     
+    // 先检查是否有中国和印度的数据
+    const hasChina = countryStats['China'] && countryStats['China'].vaccinations > 0 && countryStats['China'].deaths > 0;
+    const hasIndia = countryStats['India'] && countryStats['India'].vaccinations > 0 && countryStats['India'].deaths > 0;
+    
     Object.entries(countryStats)
-        .filter(([country, stats]) => stats.vaccinations > 0 && stats.deaths > 0)
+        .filter(([country, stats]) => {
+            // 排除中国和印度，并且确保有数据
+            const isExcluded = country === 'China' || country === 'India';
+            const hasData = stats.vaccinations > 0 && stats.deaths > 0;
+            return !isExcluded && hasData;
+        })
         .forEach(([country, stats]) => {
-            // 排除中国和印度
-            if (country !== 'China' && country !== 'India') {
-                const point = {
-                    x: stats.vaccinations,
-                    y: stats.deaths,
-                    country: country
-                };
-                otherCountriesData.push(point);
-            }
+            const point = {
+                x: stats.vaccinations,
+                y: stats.deaths,
+                country: country
+            };
+            otherCountriesData.push(point);
         });
+    
+    // 调试信息
+    if (hasChina || hasIndia) {
+        console.log('主图表排除的国家:', hasChina ? 'China' : '', hasIndia ? 'India' : '');
+        console.log('主图表数据点数量:', otherCountriesData.length);
+    }
 
     if (chartInstances.vaccinationDeathRelationChart) {
         chartInstances.vaccinationDeathRelationChart.destroy();
@@ -760,10 +783,10 @@ function updateMap() {
             } else {
                 // 其他95%的值：使用更细致的缩放，让小值之间的差异更明显
                 const normalized = deaths / topThreshold; // 相对于阈值的比例，0到1之间
-                // 使用平方根缩放，让小值之间的差异更明显
-                const scaledRatio = Math.sqrt(normalized);
-                // 半径范围：8到20，让小值也能区分
-                radius = 8 + scaledRatio * 12;
+                // 使用线性缩放，让小值之间的差异更明显
+                // 不再使用平方根，直接使用线性映射
+                // 半径范围：6到22，增大范围让差异更明显
+                radius = 6 + normalized * 16;
             }
             
             const circle = L.circleMarker(coords, {
