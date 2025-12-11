@@ -683,6 +683,7 @@ function updateMap() {
             // 韩国和美国使用黄色
             if (isoCode === 'KOR' || isoCode === 'USA') {
                 color = 'rgb(255, 215, 0)'; // 金黄色
+                console.log("韩国和美国使用黄色", isoCode);
             } else {
                 // 其他国家根据死亡数分成5个等级
                 const intensity = Math.min(deaths / maxDeaths, 1);
