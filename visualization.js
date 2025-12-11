@@ -89,7 +89,18 @@ const isoCodeCoordinates = {
     GBR: [55.3781, -3.4360], USA: [39.8283, -98.5795], URY: [-32.5228, -55.7658],
     UZB: [41.3775, 64.5853], VUT: [-15.3767, 166.9592], VEN: [6.4238, -66.5897],
     VNM: [14.0583, 108.2772], WLF: [-14.2938, -178.1165], ESH: [24.2155, -12.8858],
-    YEM: [15.5527, 48.5164], ZMB: [-13.1339, 27.8493], ZWE: [-19.0154, 29.1549]
+    YEM: [15.5527, 48.5164], ZMB: [-13.1339, 27.8493], ZWE: [-19.0154, 29.1549],
+    // 补充缺失的 ISO 代码
+    AIA: [18.2206, -63.0686], // Anguilla
+    CIV: [7.5400, -5.5471], // Côte d'Ivoire (Ivory Coast)
+    TKL: [-9.2002, -171.8484], // Tokelau
+    // Our World in Data 特殊代码
+    OWID_CYN: [35.1264, 33.4299], // Northern Cyprus (使用塞浦路斯坐标)
+    OWID_ENG: [52.3555, -1.1743], // England
+    OWID_KOS: [42.6026, 20.9030], // Kosovo
+    OWID_NIR: [54.5973, -5.9301], // Northern Ireland
+    OWID_SCT: [56.4907, -4.2026], // Scotland
+    OWID_WLS: [52.1307, -3.7837] // Wales
 };
 
 // 加载JSON数据
@@ -667,26 +678,32 @@ function updateMap() {
         const { country, deaths } = data;
         const coords = isoCodeCoordinates[isoCode];
         if (coords) {
-            // 将死亡数分成5个等级
-            const intensity = Math.min(deaths / maxDeaths, 1);
             let color;
             
-            // 5个颜色等级：从浅到深
-            if (intensity < 0.2) {
-                // 等级1：非常浅的粉色（死亡数最少）
-                color = 'rgb(255, 240, 245)';
-            } else if (intensity < 0.4) {
-                // 等级2：浅粉色
-                color = 'rgb(255, 182, 193)';
-            } else if (intensity < 0.6) {
-                // 等级3：粉色
-                color = 'rgb(255, 105, 180)';
-            } else if (intensity < 0.8) {
-                // 等级4：红色
-                color = 'rgb(220, 20, 60)';
+            // 韩国和美国使用黄色
+            if (isoCode === 'KOR' || isoCode === 'USA') {
+                color = 'rgb(255, 215, 0)'; // 金黄色
             } else {
-                // 等级5：深红色（死亡数最多）
-                color = 'rgb(139, 0, 0)';
+                // 其他国家根据死亡数分成5个等级
+                const intensity = Math.min(deaths / maxDeaths, 1);
+                
+                // 5个颜色等级：从浅到深
+                if (intensity < 0.2) {
+                    // 等级1：非常浅的粉色（死亡数最少）
+                    color = 'rgb(255, 240, 245)';
+                } else if (intensity < 0.4) {
+                    // 等级2：浅粉色
+                    color = 'rgb(255, 182, 193)';
+                } else if (intensity < 0.6) {
+                    // 等级3：粉色
+                    color = 'rgb(255, 105, 180)';
+                } else if (intensity < 0.8) {
+                    // 等级4：红色
+                    color = 'rgb(220, 20, 60)';
+                } else {
+                    // 等级5：深红色（死亡数最多）
+                    color = 'rgb(139, 0, 0)';
+                }
             }
             
             // 计算标记大小：使用1.5次方缩放，比平方小但比线性明显
