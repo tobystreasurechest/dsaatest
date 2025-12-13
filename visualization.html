@@ -18,13 +18,23 @@
             <!-- 统计卡片 -->
             <div class="stats-bar" id="statsBar"></div>
 
-            <!-- 控制面板 -->
+            <!-- 地图控制面板 -->
             <div class="controls">
                 <div class="control-group">
                     <label>Select Date for Map:</label>
                     <input type="date" id="mapDate">
                     <button class="btn" onclick="updateMap()">Update Map</button>
                 </div>
+            </div>
+
+            <!-- 地图容器 -->
+            <div class="chart-container full-width" style="margin-bottom: 30px;">
+                <h2 class="chart-title">Deaths by Country on Selected Date</h2>
+                <div id="map" style="height: 500px; width: 100%; border-radius: 10px;"></div>
+            </div>
+
+            <!-- 图表控制面板 -->
+            <div class="controls">
                 <div class="control-group">
                     <label>Date Range:</label>
                     <input type="date" id="startDate">
@@ -44,46 +54,30 @@
                 <button class="btn" onclick="resetFilters()">Reset</button>
             </div>
 
-            <!-- 地图容器 -->
-            <div class="chart-container full-width">
-                <h2 class="chart-title">Deaths by Country on Selected Date</h2>
-                <div id="map" style="height: 500px; width: 100%; border-radius: 10px;"></div>
-            </div>
-
             <div class="charts-grid" id="chartsContainer">
             <!-- 图表1: Vaccination Over Time Across Countries -->
             <div class="chart-container full-width">
-                <h2 class="chart-title">1. Vaccination Over Time Across Countries</h2>
+                <h2 class="chart-title">Vaccination Over Time Across Countries</h2>
                 <canvas id="vaccinationOverTimeChart"></canvas>
             </div>
 
             <!-- 图表2: Vaccination and Death Over Time -->
             <div class="chart-container full-width">
-                <h2 class="chart-title">2. Vaccination and Death Over Time</h2>
+                <h2 class="chart-title">Vaccination and Death Over Time</h2>
                 <canvas id="vaccinationDeathOverTimeChart"></canvas>
             </div>
 
-            <!-- 图表4: Vaccinations and Death Relations -->
+            <!-- 图表4: Vaccination Rate vs Case Rate -->
             <div class="chart-container full-width">
-                <h2 class="chart-title">4. Vaccinations and Death Relations</h2>
-                <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 400px;">
-                        <h3 style="font-size: 16px; margin-bottom: 10px; text-align: center;">Low Range</h3>
-                        <canvas id="vaccinationDeathRelationChart"></canvas>
-                    </div>
-                    <div style="flex: 1; min-width: 400px;">
-                        <h3 style="font-size: 16px; margin-bottom: 10px; text-align: center;">Medium Range</h3>
-                        <canvas id="mediumRangeSubChart"></canvas>
-                    </div>
-                    <div style="flex: 1; min-width: 400px;">
-                        <h3 style="font-size: 16px; margin-bottom: 10px; text-align: center;">High Range</h3>
-                        <canvas id="highRangeSubChart"></canvas>
-                    </div>
-                    <div style="flex: 0 0 400px;">
-                        <h3 style="font-size: 16px; margin-bottom: 10px; text-align: center;">China & India</h3>
-                        <canvas id="chinaIndiaSubChart"></canvas>
-                    </div>
+                <h2 class="chart-title">Correlation between Vaccination and Cases</h2>
+                <div class="control-group" style="margin-bottom: 15px; justify-content: center;">
+                    <label for="relationChartDate" style="margin-right: 10px;">Select Date:</label>
+                    <input type="date" id="relationChartDate" style="margin-right: 10px;">
+                    <input type="range" id="relationChartDateSlider" min="0" max="100" value="100" style="width: 300px; margin-right: 10px;">
+                    <span id="relationChartDateDisplay" style="font-weight: 600; color: #667eea;"></span>
+                    <button id="restoreRelationChartBtn" class="btn" style="margin-left: 15px; display: none;" onclick="restoreRelationChart()">Restore</button>
                 </div>
+                <canvas id="vaccinationDeathRelationChart"></canvas>
             </div>
         </div>
     </div>

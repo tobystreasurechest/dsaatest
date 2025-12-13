@@ -9,6 +9,12 @@ let chartInstances = {};
 let mapInstance = null;
 let mapMarkers = [];
 let missingIsoLogged = false;
+let relationChartState = {
+    isCountryView: false,
+    selectedCountry: null,
+    originalData: null,
+    originalDate: null
+};
 
 // ISO代码到坐标的映射（使用ISO 3166-1 alpha-3代码）
 const isoCodeCoordinates = {
@@ -143,9 +149,6 @@ function createCharts() {
     createVaccinationOverTimeChart();
     createVaccinationDeathOverTimeChart();
     createVaccinationDeathRelationChart();
-    createMediumRangeSubChart();
-    createHighRangeSubChart();
-    createChinaIndiaSubChart();
 }
 
 // 图表1: Vaccination Over Time Across Countries
@@ -278,53 +281,115 @@ function createVaccinationOverTimeChart() {
 
 // 图表2: Vaccination and Death Over Time
 function createVaccinationDeathOverTimeChart() {
-    // 按日期汇总全球数据
-    const dateData = {};
+    // 先按国家分组，收集所有日期
+    const byCountry = {};
     const allDates = new Set();
     
+    // 按国家分组
     filteredCountryData.forEach(item => {
-        if (item.date) {
+        if (item.date && item.country) {
             const date = new Date(item.date).toISOString().split('T')[0];
             allDates.add(date);
             
-            if (!dateData[date]) {
-                dateData[date] = {
-                    vaccinations: {},
-                    deaths: {}
+            const country = item.country;
+            if (!byCountry[country]) {
+                byCountry[country] = {};
+            }
+            
+            // 使用对象存储，以日期为key，方便查找
+            if (!byCountry[country][date]) {
+                byCountry[country][date] = {
+                    vaccinations: null,
+                    deaths: null
                 };
             }
             
-            // 记录每个国家在该日期的最大值（累计值）
-            if (item.country) {
-                if (item.total_vaccinations) {
-                    if (!dateData[date].vaccinations[item.country] || 
-                        item.total_vaccinations > dateData[date].vaccinations[item.country]) {
-                        dateData[date].vaccinations[item.country] = item.total_vaccinations;
-                    }
+            // 如果有多条记录，取最大值
+            if (item.total_vaccinations !== null && item.total_vaccinations !== undefined) {
+                if (byCountry[country][date].vaccinations === null || 
+                    item.total_vaccinations > byCountry[country][date].vaccinations) {
+                    byCountry[country][date].vaccinations = item.total_vaccinations;
                 }
-                
-                if (item.Cumulative_deaths) {
-                    if (!dateData[date].deaths[item.country] || 
-                        item.Cumulative_deaths > dateData[date].deaths[item.country]) {
-                        dateData[date].deaths[item.country] = item.Cumulative_deaths;
-                    }
+            }
+            
+            if (item.Cumulative_deaths !== null && item.Cumulative_deaths !== undefined) {
+                if (byCountry[country][date].deaths === null || 
+                    item.Cumulative_deaths > byCountry[country][date].deaths) {
+                    byCountry[country][date].deaths = item.Cumulative_deaths;
                 }
             }
         }
     });
     
-    // 将每个日期的数据汇总为全球总数
-    Object.keys(dateData).forEach(date => {
-        const vaccinations = Object.values(dateData[date].vaccinations).reduce((sum, val) => sum + val, 0);
-        const deaths = Object.values(dateData[date].deaths).reduce((sum, val) => sum + val, 0);
-        dateData[date] = {
-            vaccinations: vaccinations,
-            deaths: deaths
-        };
+    // 对每个国家，为所有日期创建完整记录，缺失的日期使用前一天的累计值
+    const processedCountryData = {};
+    const sortedDates = Array.from(allDates).sort();
+    
+    Object.keys(byCountry).forEach(country => {
+        const countryData = byCountry[country];
+        const processed = [];
+        
+        let prevVaccinations = null;
+        let prevDeaths = null;
+        
+        // 为每个日期创建记录
+        sortedDates.forEach(date => {
+            let vaccinations = countryData[date] ? countryData[date].vaccinations : null;
+            let deaths = countryData[date] ? countryData[date].deaths : null;
+            
+            // 如果今天没有数据，使用昨天的累计值
+            if (vaccinations === null && prevVaccinations !== null) {
+                vaccinations = prevVaccinations;
+            } else if (vaccinations !== null) {
+                // 确保单调不减
+                if (prevVaccinations !== null && vaccinations < prevVaccinations) {
+                    vaccinations = prevVaccinations;
+                }
+                prevVaccinations = vaccinations;
+            }
+            
+            if (deaths === null && prevDeaths !== null) {
+                deaths = prevDeaths;
+            } else if (deaths !== null) {
+                // 确保单调不减
+                if (prevDeaths !== null && deaths < prevDeaths) {
+                    deaths = prevDeaths;
+                }
+                prevDeaths = deaths;
+            }
+            
+            processed.push({
+                date: date,
+                vaccinations: vaccinations,
+                deaths: deaths
+            });
+        });
+        
+        processedCountryData[country] = processed;
     });
     
-    // 按日期排序
-    const sortedDates = Array.from(allDates).sort();
+    // 按日期汇总全球数据
+    const dateData = {};
+    
+    sortedDates.forEach((date, dateIndex) => {
+        let totalVaccinations = 0;
+        let totalDeaths = 0;
+        
+        Object.keys(processedCountryData).forEach(country => {
+            const record = processedCountryData[country][dateIndex];
+            if (record && record.vaccinations !== null) {
+                totalVaccinations += record.vaccinations;
+            }
+            if (record && record.deaths !== null) {
+                totalDeaths += record.deaths;
+            }
+        });
+        
+        dateData[date] = {
+            vaccinations: totalVaccinations > 0 ? totalVaccinations : null,
+            deaths: totalDeaths > 0 ? totalDeaths : null
+        };
+    });
     
     // 准备数据
     const vaccinationData = sortedDates.map(date => {
@@ -452,108 +517,122 @@ function createVaccinationDeathOverTimeChart() {
 }
 
 // 图表4: Vaccinations and Death Relations
-function createVaccinationDeathRelationChart() {
-    // 按国家汇总最新数据
+function createVaccinationDeathRelationChart(selectedDate = null) {
+    // 如果没有指定日期，使用最新日期
+    if (!selectedDate) {
+        const allDates = new Set();
+        filteredCountryData.forEach(item => {
+            if (item.date) {
+                allDates.add(new Date(item.date).toISOString().split('T')[0]);
+            }
+        });
+        const sortedDates = Array.from(allDates).sort();
+        selectedDate = sortedDates[sortedDates.length - 1];
+    }
+    
+    // 按国家汇总指定日期及之前的数据
     const countryStats = {};
     
     filteredCountryData.forEach(item => {
-        if (item.country) {
-            if (!countryStats[item.country]) {
-                countryStats[item.country] = {
-                    vaccinations: 0,
-                    deaths: 0
-                };
-            }
-            if (item.total_vaccinations) {
-                countryStats[item.country].vaccinations = Math.max(
-                    countryStats[item.country].vaccinations,
-                    item.total_vaccinations
-                );
-            }
-            if (item.Cumulative_deaths) {
-                countryStats[item.country].deaths = Math.max(
-                    countryStats[item.country].deaths,
-                    item.Cumulative_deaths
-                );
+        if (item.country && item.population && item.date) {
+            const itemDate = new Date(item.date).toISOString().split('T')[0];
+            
+            // 只处理选定日期及之前的数据
+            if (itemDate <= selectedDate) {
+                if (!countryStats[item.country]) {
+                    countryStats[item.country] = {
+                        vaccinations: null,
+                        cases: null,
+                        population: item.population
+                    };
+                }
+                
+                // 更新到选定日期为止的最大值（累计值）
+                if (item.people_fully_vaccinated !== null && item.people_fully_vaccinated !== undefined) {
+                    if (countryStats[item.country].vaccinations === null || 
+                        item.people_fully_vaccinated > countryStats[item.country].vaccinations) {
+                        countryStats[item.country].vaccinations = item.people_fully_vaccinated;
+                    }
+                }
+                
+                if (item.Cumulative_cases !== null && item.Cumulative_cases !== undefined) {
+                    if (countryStats[item.country].cases === null || 
+                        item.Cumulative_cases > countryStats[item.country].cases) {
+                        countryStats[item.country].cases = item.Cumulative_cases;
+                    }
+                }
             }
         }
     });
 
-    // 转换为散点图数据，排除中国和印度，并按数值范围分组
-    const allOtherCountriesData = [];
-    
-    // 先检查是否有中国和印度的数据
-    const hasChina = countryStats['China'] && countryStats['China'].vaccinations > 0 && countryStats['China'].deaths > 0;
-    const hasIndia = countryStats['India'] && countryStats['India'].vaccinations > 0 && countryStats['India'].deaths > 0;
+    // 转换为散点图数据，包含所有国家
+    const allCountriesData = [];
     
     Object.entries(countryStats)
         .filter(([country, stats]) => {
-            // 排除中国和印度，并且确保有数据
-            const isExcluded = country === 'China' || country === 'India';
-            const hasData = stats.vaccinations > 0 && stats.deaths > 0;
-            return !isExcluded && hasData;
+            // 确保有数据和人口数据
+            const hasData = stats.vaccinations !== null && stats.vaccinations > 0 && 
+                          stats.cases !== null && stats.cases > 0 && 
+                          stats.population > 0;
+            if (!hasData) return false;
+            
+            // 计算疫苗接种率，如果 >= 100% 则不显示
+            const vaccinationRate = stats.vaccinations / stats.population;
+            return vaccinationRate < 1.0; // 小于100%
         })
         .forEach(([country, stats]) => {
+            // 计算疫苗接种率（people_fully_vaccinated / population）
+            const vaccinationRate = stats.vaccinations / stats.population;
+            // 计算患病率（Cumulative_cases / population）
+            const caseRate = stats.cases / stats.population;
+            
             const point = {
-                x: stats.vaccinations,
-                y: stats.deaths,
+                x: vaccinationRate,
+                y: caseRate,
                 country: country
             };
-            allOtherCountriesData.push(point);
+            allCountriesData.push(point);
         });
     
-    // 计算数值范围，用于分组
-    const vaccinations = allOtherCountriesData.map(p => p.x);
-    const deaths = allOtherCountriesData.map(p => p.y);
-    const maxVaccinations = Math.max(...vaccinations, 1);
-    const maxDeaths = Math.max(...deaths, 1);
+    console.log('图表数据点数量:', allCountriesData.length, '日期:', selectedDate);
     
-    // 定义范围阈值（基于疫苗接种数和死亡数的组合值）
-    const combinedValues = allOtherCountriesData.map(p => Math.sqrt(p.x * p.y));
-    const sortedCombined = [...combinedValues].sort((a, b) => a - b);
-    const lowThreshold = sortedCombined[Math.floor(sortedCombined.length * 0.33)]; // 33%分位
-    const highThreshold = sortedCombined[Math.floor(sortedCombined.length * 0.67)]; // 67%分位
+    // 保存原始数据状态
+    relationChartState.originalData = allCountriesData;
+    relationChartState.originalDate = selectedDate;
+    relationChartState.isCountryView = false;
     
-    // 分组数据
-    const lowRangeData = [];
-    const mediumRangeData = [];
-    const highRangeData = [];
+    // 显示时间控件
+    const dateInput = document.getElementById('relationChartDate');
+    const dateSlider = document.getElementById('relationChartDateSlider');
+    const dateDisplay = document.getElementById('relationChartDateDisplay');
+    if (dateInput) dateInput.style.display = 'inline-block';
+    if (dateSlider) dateSlider.style.display = 'inline-block';
+    if (dateDisplay) dateDisplay.style.display = 'inline-block';
     
-    allOtherCountriesData.forEach(point => {
-        const combined = Math.sqrt(point.x * point.y);
-        if (combined <= lowThreshold) {
-            lowRangeData.push(point);
-        } else if (combined <= highThreshold) {
-            mediumRangeData.push(point);
-        } else {
-            highRangeData.push(point);
-        }
-    });
+    // 隐藏恢复按钮
+    const restoreBtn = document.getElementById('restoreRelationChartBtn');
+    if (restoreBtn) {
+        restoreBtn.style.display = 'none';
+    }
     
-    // 调试信息
-    console.log('数据分组:', {
-        low: lowRangeData.length,
-        medium: mediumRangeData.length,
-        high: highRangeData.length
-    });
+    // 更新图表标题显示当前日期
+    const chartTitle = document.querySelector('#vaccinationDeathRelationChart').closest('.chart-container').querySelector('.chart-title');
+    if (chartTitle) {
+        const dateStr = new Date(selectedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        chartTitle.innerHTML = `Correlation between Vaccination and Cases<br>(${dateStr})`;
+    }
 
     if (chartInstances.vaccinationDeathRelationChart) {
         chartInstances.vaccinationDeathRelationChart.destroy();
     }
 
-    const canvas = document.getElementById('vaccinationDeathRelationChart');
-    if (!canvas) {
-        console.error('Canvas element not found: vaccinationDeathRelationChart');
-        return;
-    }
-
-    chartInstances.vaccinationDeathRelationChart = new Chart(canvas, {
+    chartInstances.vaccinationDeathRelationChart = new Chart(document.getElementById('vaccinationDeathRelationChart'), {
         type: 'scatter',
         data: {
             datasets: [
                 {
                     label: 'Countries',
-                    data: lowRangeData,
+                    data: allCountriesData,
                     backgroundColor: 'rgba(75, 192, 192, 0.5)',
                     borderColor: 'rgba(75, 192, 192, 1)',
                     borderWidth: 1.5,
@@ -565,6 +644,15 @@ function createVaccinationDeathRelationChart() {
         options: {
             responsive: true,
             maintainAspectRatio: true,
+            onClick: function(event, elements) {
+                if (elements.length > 0) {
+                    const clickedElement = elements[0];
+                    const datasetIndex = clickedElement.datasetIndex;
+                    const index = clickedElement.index;
+                    const country = this.data.datasets[datasetIndex].data[index].country;
+                    showCountryTimeSeries(country, selectedDate);
+                }
+            },
             plugins: {
                 legend: {
                     display: false
@@ -577,8 +665,9 @@ function createVaccinationDeathRelationChart() {
                         label: function(context) {
                             const data = context.raw;
                             return [
-                                'Vaccinations: ' + (data.x / 1000000).toFixed(1) + 'M',
-                                'Deaths: ' + (data.y / 1000).toFixed(0) + 'K'
+                                'Vaccination Rate: ' + (data.x * 100).toFixed(2) + '%',
+                                'Case Rate: ' + (data.y * 100).toFixed(2) + '%',
+                                'Click to view the time series of the country'
                             ];
                         }
                     }
@@ -588,22 +677,22 @@ function createVaccinationDeathRelationChart() {
                 x: {
                     title: {
                         display: true,
-                        text: 'Total Vaccinations'
+                        text: 'Vaccination Rate (People Fully Vaccinated / Population)'
                     },
                     ticks: {
                         callback: function(value) {
-                            return (value / 1000000).toFixed(0) + 'M';
+                            return (value * 100).toFixed(1) + '%';
                         }
                     }
                 },
                 y: {
                     title: {
                         display: true,
-                        text: 'Total Deaths'
+                        text: 'Case Rate (Cumulative Cases / Population)'
                     },
                     ticks: {
                         callback: function(value) {
-                            return (value / 1000).toFixed(0) + 'K';
+                            return (value * 100).toFixed(1) + '%';
                         }
                     }
                 }
@@ -612,94 +701,112 @@ function createVaccinationDeathRelationChart() {
     });
 }
 
-// 中值范围子图
-function createMediumRangeSubChart() {
-    // 获取分组数据（需要从主函数中获取，这里重新计算）
-    const countryStats = {};
+// 显示单个国家的时间序列
+function showCountryTimeSeries(country, selectedDate) {
+    // 收集该国家所有日期的数据
+    const countryTimeData = [];
     
     filteredCountryData.forEach(item => {
-        if (item.country) {
-            if (!countryStats[item.country]) {
-                countryStats[item.country] = {
-                    vaccinations: 0,
-                    deaths: 0
-                };
-            }
-            if (item.total_vaccinations) {
-                countryStats[item.country].vaccinations = Math.max(
-                    countryStats[item.country].vaccinations,
-                    item.total_vaccinations
-                );
-            }
-            if (item.Cumulative_deaths) {
-                countryStats[item.country].deaths = Math.max(
-                    countryStats[item.country].deaths,
-                    item.Cumulative_deaths
-                );
+        if (item.country === country && item.date && item.population) {
+            const vaccinations = item.people_fully_vaccinated !== null && item.people_fully_vaccinated !== undefined ? item.people_fully_vaccinated : null;
+            const cases = item.Cumulative_cases !== null && item.Cumulative_cases !== undefined ? item.Cumulative_cases : null;
+            
+            if (vaccinations !== null && cases !== null && item.population > 0) {
+                const vaccinationRate = vaccinations / item.population;
+                
+                // 只显示疫苗接种率 < 100% 的数据点
+                if (vaccinationRate < 1.0) {
+                    const date = new Date(item.date).toISOString().split('T')[0];
+                    countryTimeData.push({
+                        x: vaccinationRate,
+                        y: cases, // 直接使用累计病例数
+                        date: date,
+                        country: country
+                    });
+                }
             }
         }
     });
-
-    const allOtherCountriesData = [];
-    Object.entries(countryStats)
-        .filter(([country, stats]) => {
-            const isExcluded = country === 'China' || country === 'India';
-            const hasData = stats.vaccinations > 0 && stats.deaths > 0;
-            return !isExcluded && hasData;
-        })
-        .forEach(([country, stats]) => {
-            allOtherCountriesData.push({
-                x: stats.vaccinations,
-                y: stats.deaths,
-                country: country
-            });
-        });
-
-    const combinedValues = allOtherCountriesData.map(p => Math.sqrt(p.x * p.y));
-    const sortedCombined = [...combinedValues].sort((a, b) => a - b);
-    const lowThreshold = sortedCombined[Math.floor(sortedCombined.length * 0.33)];
-    const highThreshold = sortedCombined[Math.floor(sortedCombined.length * 0.67)];
-
-    const mediumRangeData = allOtherCountriesData.filter(point => {
-        const combined = Math.sqrt(point.x * point.y);
-        return combined > lowThreshold && combined <= highThreshold;
-    });
-
-    if (chartInstances.mediumRangeSubChart) {
-        chartInstances.mediumRangeSubChart.destroy();
+    
+    // 按日期排序
+    countryTimeData.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    if (countryTimeData.length === 0) {
+        alert('该国家没有足够的数据');
+        return;
     }
-
-    const canvas = document.getElementById('mediumRangeSubChart');
-    if (!canvas) return;
-
-    chartInstances.mediumRangeSubChart = new Chart(canvas, {
+    
+    // 更新状态
+    relationChartState.isCountryView = true;
+    relationChartState.selectedCountry = country;
+    
+    // 隐藏时间控件
+    const dateInput = document.getElementById('relationChartDate');
+    const dateSlider = document.getElementById('relationChartDateSlider');
+    const dateDisplay = document.getElementById('relationChartDateDisplay');
+    if (dateInput) dateInput.style.display = 'none';
+    if (dateSlider) dateSlider.style.display = 'none';
+    if (dateDisplay) dateDisplay.style.display = 'none';
+    
+    // 显示恢复按钮
+    const restoreBtn = document.getElementById('restoreRelationChartBtn');
+    if (restoreBtn) {
+        restoreBtn.style.display = 'inline-block';
+    }
+    
+    // 更新图表标题
+    const chartTitle = document.querySelector('#vaccinationDeathRelationChart').closest('.chart-container').querySelector('.chart-title');
+    if (chartTitle) {
+        chartTitle.textContent = `4. ${country} - Vaccination Rate vs Cumulative Cases Over Time`;
+    }
+    
+    // 销毁旧图表
+    if (chartInstances.vaccinationDeathRelationChart) {
+        chartInstances.vaccinationDeathRelationChart.destroy();
+    }
+    
+    // 创建新的散点图，显示时间序列
+    chartInstances.vaccinationDeathRelationChart = new Chart(document.getElementById('vaccinationDeathRelationChart'), {
         type: 'scatter',
         data: {
-            datasets: [{
-                label: 'Countries',
-                data: mediumRangeData,
-                backgroundColor: 'rgba(255, 206, 86, 0.5)',
-                borderColor: 'rgba(255, 206, 86, 1)',
-                borderWidth: 1.5,
-                pointRadius: 6,
-                pointHoverRadius: 8
-            }]
+            datasets: [
+                {
+                    label: country,
+                    data: countryTimeData,
+                    backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 2,
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
+                    showLine: true,
+                    tension: 0.4
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
+            onClick: function(event, elements) {
+                // 在单国视图中，点击可以恢复
+                restoreRelationChart();
+            },
             plugins: {
-                legend: { display: false },
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
                 tooltip: {
                     callbacks: {
                         title: function(context) {
-                            return context[0].raw.country;
+                            const data = context[0].raw;
+                            return `${data.country} - ${new Date(data.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}`;
                         },
                         label: function(context) {
                             const data = context.raw;
                             return [
-                                'Vaccinations: ' + (data.x / 1000000).toFixed(1) + 'M',
-                                'Deaths: ' + (data.y / 1000).toFixed(0) + 'K'
+                                'Vaccination Rate: ' + (data.x * 100).toFixed(2) + '%',
+                                'Cumulative Cases: ' + (data.y / 1000).toFixed(0) + 'K',
+                                '点击恢复散点图'
                             ];
                         }
                     }
@@ -707,18 +814,29 @@ function createMediumRangeSubChart() {
             },
             scales: {
                 x: {
-                    title: { display: true, text: 'Total Vaccinations' },
+                    title: {
+                        display: true,
+                        text: 'Vaccination Rate (People Fully Vaccinated / Population)'
+                    },
                     ticks: {
                         callback: function(value) {
-                            return (value / 1000000).toFixed(0) + 'M';
+                            return (value * 100).toFixed(1) + '%';
                         }
                     }
                 },
                 y: {
-                    title: { display: true, text: 'Total Deaths' },
+                    title: {
+                        display: true,
+                        text: 'Cumulative Cases'
+                    },
                     ticks: {
                         callback: function(value) {
-                            return (value / 1000).toFixed(0) + 'K';
+                            if (value >= 1000000) {
+                                return (value / 1000000).toFixed(1) + 'M';
+                            } else if (value >= 1000) {
+                                return (value / 1000).toFixed(0) + 'K';
+                            }
+                            return value.toFixed(0);
                         }
                     }
                 }
@@ -727,117 +845,32 @@ function createMediumRangeSubChart() {
     });
 }
 
-// 高值范围子图
-function createHighRangeSubChart() {
-    const countryStats = {};
-    
-    filteredCountryData.forEach(item => {
-        if (item.country) {
-            if (!countryStats[item.country]) {
-                countryStats[item.country] = {
-                    vaccinations: 0,
-                    deaths: 0
-                };
-            }
-            if (item.total_vaccinations) {
-                countryStats[item.country].vaccinations = Math.max(
-                    countryStats[item.country].vaccinations,
-                    item.total_vaccinations
-                );
-            }
-            if (item.Cumulative_deaths) {
-                countryStats[item.country].deaths = Math.max(
-                    countryStats[item.country].deaths,
-                    item.Cumulative_deaths
-                );
-            }
-        }
-    });
-
-    const allOtherCountriesData = [];
-    Object.entries(countryStats)
-        .filter(([country, stats]) => {
-            const isExcluded = country === 'China' || country === 'India';
-            const hasData = stats.vaccinations > 0 && stats.deaths > 0;
-            return !isExcluded && hasData;
-        })
-        .forEach(([country, stats]) => {
-            allOtherCountriesData.push({
-                x: stats.vaccinations,
-                y: stats.deaths,
-                country: country
-            });
-        });
-
-    const combinedValues = allOtherCountriesData.map(p => Math.sqrt(p.x * p.y));
-    const sortedCombined = [...combinedValues].sort((a, b) => a - b);
-    const highThreshold = sortedCombined[Math.floor(sortedCombined.length * 0.67)];
-
-    const highRangeData = allOtherCountriesData.filter(point => {
-        const combined = Math.sqrt(point.x * point.y);
-        return combined > highThreshold;
-    });
-
-    if (chartInstances.highRangeSubChart) {
-        chartInstances.highRangeSubChart.destroy();
+// 恢复散点图
+function restoreRelationChart() {
+    if (!relationChartState.isCountryView || !relationChartState.originalData) {
+        return;
     }
-
-    const canvas = document.getElementById('highRangeSubChart');
-    if (!canvas) return;
-
-    chartInstances.highRangeSubChart = new Chart(canvas, {
-        type: 'scatter',
-        data: {
-            datasets: [{
-                label: 'Countries',
-                data: highRangeData,
-                backgroundColor: 'rgba(255, 99, 132, 0.5)',
-                borderColor: 'rgba(255, 99, 132, 1)',
-                borderWidth: 1.5,
-                pointRadius: 7,
-                pointHoverRadius: 9
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        title: function(context) {
-                            return context[0].raw.country;
-                        },
-                        label: function(context) {
-                            const data = context.raw;
-                            return [
-                                'Vaccinations: ' + (data.x / 1000000).toFixed(1) + 'M',
-                                'Deaths: ' + (data.y / 1000).toFixed(0) + 'K'
-                            ];
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    title: { display: true, text: 'Total Vaccinations' },
-                    ticks: {
-                        callback: function(value) {
-                            return (value / 1000000).toFixed(0) + 'M';
-                        }
-                    }
-                },
-                y: {
-                    title: { display: true, text: 'Total Deaths' },
-                    ticks: {
-                        callback: function(value) {
-                            return (value / 1000).toFixed(0) + 'K';
-                        }
-                    }
-                }
-            }
-        }
-    });
+    
+    // 恢复状态
+    relationChartState.isCountryView = false;
+    relationChartState.selectedCountry = null;
+    
+    // 显示时间控件
+    const dateInput = document.getElementById('relationChartDate');
+    const dateSlider = document.getElementById('relationChartDateSlider');
+    const dateDisplay = document.getElementById('relationChartDateDisplay');
+    if (dateInput) dateInput.style.display = 'inline-block';
+    if (dateSlider) dateSlider.style.display = 'inline-block';
+    if (dateDisplay) dateDisplay.style.display = 'inline-block';
+    
+    // 隐藏恢复按钮
+    const restoreBtn = document.getElementById('restoreRelationChartBtn');
+    if (restoreBtn) {
+        restoreBtn.style.display = 'none';
+    }
+    
+    // 重新创建原始散点图
+    createVaccinationDeathRelationChart(relationChartState.originalDate);
 }
 
 // 中国和印度子图
@@ -846,11 +879,12 @@ function createChinaIndiaSubChart() {
     const countryStats = {};
     
     filteredCountryData.forEach(item => {
-        if (item.country) {
+        if (item.country && item.population) {
             if (!countryStats[item.country]) {
                 countryStats[item.country] = {
                     vaccinations: 0,
-                    deaths: 0
+                    cases: 0,
+                    population: item.population
                 };
             }
             if (item.total_vaccinations) {
@@ -859,10 +893,10 @@ function createChinaIndiaSubChart() {
                     item.total_vaccinations
                 );
             }
-            if (item.Cumulative_deaths) {
-                countryStats[item.country].deaths = Math.max(
-                    countryStats[item.country].deaths,
-                    item.Cumulative_deaths
+            if (item.Cumulative_cases) {
+                countryStats[item.country].cases = Math.max(
+                    countryStats[item.country].cases,
+                    item.Cumulative_cases
                 );
             }
         }
@@ -873,11 +907,20 @@ function createChinaIndiaSubChart() {
     const indiaData = [];
     
     Object.entries(countryStats)
-        .filter(([country, stats]) => stats.vaccinations > 0 && stats.deaths > 0)
+        .filter(([country, stats]) => {
+            const isChinaOrIndia = country === 'China' || country === 'India';
+            const hasData = stats.vaccinations > 0 && stats.cases > 0 && stats.population > 0;
+            return isChinaOrIndia && hasData;
+        })
         .forEach(([country, stats]) => {
+            // 计算疫苗接种率（total_vaccinations / population）
+            const vaccinationRate = stats.vaccinations / stats.population;
+            // 使用累计病例数（Cumulative_cases）
+            const cumulativeCases = stats.cases;
+            
             const point = {
-                x: stats.vaccinations,
-                y: stats.deaths,
+                x: vaccinationRate,
+                y: cumulativeCases,
                 country: country
             };
             
@@ -932,8 +975,8 @@ function createChinaIndiaSubChart() {
                         label: function(context) {
                             const data = context.raw;
                             return [
-                                'Vaccinations: ' + (data.x / 1000000).toFixed(1) + 'M',
-                                'Deaths: ' + (data.y / 1000).toFixed(0) + 'K'
+                                'Vaccination Rate: ' + (data.x * 100).toFixed(2) + '%',
+                                'Cumulative Cases: ' + (data.y / 1000).toFixed(0) + 'K'
                             ];
                         }
                     }
@@ -943,22 +986,27 @@ function createChinaIndiaSubChart() {
                 x: {
                     title: {
                         display: true,
-                        text: 'Total Vaccinations'
+                        text: 'Vaccination Rate'
                     },
                     ticks: {
                         callback: function(value) {
-                            return (value / 1000000).toFixed(0) + 'M';
+                            return (value * 100).toFixed(1) + '%';
                         }
                     }
                 },
                 y: {
                     title: {
                         display: true,
-                        text: 'Total Deaths'
+                        text: 'Cumulative Cases'
                     },
                     ticks: {
                         callback: function(value) {
-                            return (value / 1000).toFixed(0) + 'K';
+                            if (value >= 1000000) {
+                                return (value / 1000000).toFixed(1) + 'M';
+                            } else if (value >= 1000) {
+                                return (value / 1000).toFixed(0) + 'K';
+                            }
+                            return value.toFixed(0);
                         }
                     }
                 }
@@ -979,6 +1027,64 @@ function initializeControls() {
         // 设置地图日期为最新日期
         document.getElementById('mapDate').value = maxDate.toISOString().split('T')[0];
     }
+    
+    // 初始化关系图表的时间滑块
+    initializeRelationChartSlider();
+}
+
+// 初始化关系图表的时间滑块
+function initializeRelationChartSlider() {
+    // 获取所有可用日期
+    const allDates = new Set();
+    countryData.forEach(item => {
+        if (item.date) {
+            allDates.add(new Date(item.date).toISOString().split('T')[0]);
+        }
+    });
+    const sortedDates = Array.from(allDates).sort();
+    
+    if (sortedDates.length === 0) return;
+    
+    const minDate = sortedDates[0];
+    const maxDate = sortedDates[sortedDates.length - 1];
+    
+    // 设置日期输入和滑块
+    const dateInput = document.getElementById('relationChartDate');
+    const dateSlider = document.getElementById('relationChartDateSlider');
+    const dateDisplay = document.getElementById('relationChartDateDisplay');
+    
+    if (!dateInput || !dateSlider || !dateDisplay) return;
+    
+    dateInput.min = minDate;
+    dateInput.max = maxDate;
+    dateInput.value = maxDate;
+    dateSlider.min = 0;
+    dateSlider.max = sortedDates.length - 1;
+    dateSlider.value = sortedDates.length - 1;
+    dateDisplay.textContent = maxDate;
+    
+    // 存储日期数组供滑块使用
+    window.relationChartDates = sortedDates;
+    
+    // 日期输入改变时更新滑块和图表
+    dateInput.addEventListener('input', function() {
+        const selectedDate = this.value;
+        const index = sortedDates.indexOf(selectedDate);
+        if (index !== -1) {
+            dateSlider.value = index;
+            dateDisplay.textContent = selectedDate;
+            createVaccinationDeathRelationChart(selectedDate);
+        }
+    });
+    
+    // 滑块改变时更新日期输入和图表
+    dateSlider.addEventListener('input', function() {
+        const index = parseInt(this.value);
+        const selectedDate = sortedDates[index];
+        dateInput.value = selectedDate;
+        dateDisplay.textContent = selectedDate;
+        createVaccinationDeathRelationChart(selectedDate);
+    });
 }
 
 // 初始化地图
@@ -1076,7 +1182,6 @@ function updateMap() {
         : maxDeaths * 0.9; // 如果没有足够数据，使用90%作为阈值
 
     // 为每个国家添加标记，并记录缺失坐标的 ISO 代码
-    // 只显示在data.json中有数据的国家（dateData中的国家都来自data.json）
     const missingIso = [];
     Object.entries(dateData).forEach(([isoCode, data]) => {
         const { country, deaths } = data;
@@ -1084,7 +1189,6 @@ function updateMap() {
         if (deaths === 0 || deaths === null || deaths === undefined) {
             return;
         }
-        // 确保这个isoCode在data.json中存在（dateData已经只包含data.json中的国家）
         const coords = isoCodeCoordinates[isoCode];
         if (coords) {
             let color;
